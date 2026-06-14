@@ -140,6 +140,7 @@ function listenToReadings() {
       latestReadingReceivedAt = Date.now();
       pushReading(latest);
       startChartPlayback();
+      addEvent(`Đã kết nối document "${firestorePath.document}"`);
     },
     (error) => {
       console.error(error);
