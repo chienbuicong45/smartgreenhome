@@ -126,7 +126,7 @@ function listenToReadings() {
     (snapshot) => {
       if (!snapshot.exists()) {
         connectionText.textContent = "Firestore sẵn sàng - chưa có dữ liệu";
-        addEvent(`Chưa có document ${firestorePath.collection}/${firestorePath.document}`, "warning");
+        addEvent(`Chưa có collection "${firestorePath.collection}" với document "${firestorePath.document}"`, "warning");
         return;
       }
 
