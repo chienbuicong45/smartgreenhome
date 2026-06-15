@@ -18,6 +18,7 @@ const dashboardView = document.querySelector("#dashboardView");
 const loginForm = document.querySelector("#loginForm");
 const emailInput = document.querySelector("#emailInput");
 const passwordInput = document.querySelector("#passwordInput");
+const passwordToggle = document.querySelector("#passwordToggle");
 const authMessage = document.querySelector("#authMessage");
 const logoutButton = document.querySelector("#logoutButton");
 const temperatureValue = document.querySelector("#temperatureValue");
@@ -77,6 +78,13 @@ function showDashboardView() {
   authView.hidden = true;
   dashboardView.hidden = false;
   requestAnimationFrame(resizeCanvas);
+}
+
+function hidePassword() {
+  passwordInput.type = "password";
+  passwordToggle.textContent = "Hiện";
+  passwordToggle.setAttribute("aria-label", "Hiện mật khẩu");
+  passwordToggle.setAttribute("aria-pressed", "false");
 }
 
 async function setupFirebase() {
@@ -358,11 +366,21 @@ loginForm.addEventListener("submit", async (event) => {
   try {
     await authApi.signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
     loginForm.reset();
+    hidePassword();
     authMessage.textContent = "";
   } catch (error) {
     console.error(error);
     authMessage.textContent = `Đăng nhập thất bại: ${getFirebaseErrorText(error)}`;
   }
+});
+
+passwordToggle.addEventListener("click", () => {
+  const isPasswordHidden = passwordInput.type === "password";
+
+  passwordInput.type = isPasswordHidden ? "text" : "password";
+  passwordToggle.textContent = isPasswordHidden ? "Ẩn" : "Hiện";
+  passwordToggle.setAttribute("aria-label", isPasswordHidden ? "Ẩn mật khẩu" : "Hiện mật khẩu");
+  passwordToggle.setAttribute("aria-pressed", String(isPasswordHidden));
 });
 
 logoutButton.addEventListener("click", async () => {

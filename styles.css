@@ -89,12 +89,47 @@ input {
   outline: none;
 }
 
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 72px;
+}
+
+.auth-form .password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: var(--green);
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.auth-form .password-toggle:hover,
+.auth-form .password-toggle:focus-visible {
+  background: var(--green-soft);
+}
+
+.auth-form .password-toggle:focus-visible {
+  outline: 2px solid rgba(47, 138, 95, 0.35);
+  outline-offset: 2px;
+}
+
 .auth-form input:focus {
   border-color: var(--green);
   box-shadow: 0 0 0 3px rgba(47, 138, 95, 0.14);
 }
 
-.auth-form button,
+#loginButton,
 .logout-button {
   border: 0;
   border-radius: 8px;
@@ -104,7 +139,7 @@ input {
   cursor: pointer;
 }
 
-.auth-form button {
+#loginButton {
   min-height: 46px;
 }
 

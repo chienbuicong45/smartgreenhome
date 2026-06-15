@@ -21,7 +21,18 @@
           </label>
           <label>
             <span>Mật khẩu</span>
-            <input id="passwordInput" type="password" autocomplete="current-password" required />
+            <span class="password-field">
+              <input id="passwordInput" type="password" autocomplete="current-password" required />
+              <button
+                id="passwordToggle"
+                class="password-toggle"
+                type="button"
+                aria-label="Hiện mật khẩu"
+                aria-pressed="false"
+              >
+                Hiện
+              </button>
+            </span>
           </label>
           <button id="loginButton" type="submit">Đăng nhập</button>
         </form>
