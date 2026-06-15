@@ -95,7 +95,7 @@ input {
 }
 
 .password-field input {
-  padding-right: 72px;
+  padding-right: 52px;
 }
 
 .auth-form .password-toggle {
@@ -103,15 +103,39 @@ input {
   top: 50%;
   right: 8px;
   transform: translateY(-50%);
-  min-height: 34px;
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  place-items: center;
   border: 0;
   border-radius: 6px;
-  padding: 0 10px;
+  padding: 0;
   color: var(--green);
   background: transparent;
-  font-size: 0.88rem;
-  font-weight: 800;
   cursor: pointer;
+}
+
+.eye-icon {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.eye-closed {
+  display: none;
+}
+
+.password-toggle.is-visible .eye-open {
+  display: none;
+}
+
+.password-toggle.is-visible .eye-closed {
+  display: block;
 }
 
 .auth-form .password-toggle:hover,

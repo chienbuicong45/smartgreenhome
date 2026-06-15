@@ -82,7 +82,7 @@ function showDashboardView() {
 
 function hidePassword() {
   passwordInput.type = "password";
-  passwordToggle.textContent = "Hiện";
+  passwordToggle.classList.remove("is-visible");
   passwordToggle.setAttribute("aria-label", "Hiện mật khẩu");
   passwordToggle.setAttribute("aria-pressed", "false");
 }
@@ -378,7 +378,7 @@ passwordToggle.addEventListener("click", () => {
   const isPasswordHidden = passwordInput.type === "password";
 
   passwordInput.type = isPasswordHidden ? "text" : "password";
-  passwordToggle.textContent = isPasswordHidden ? "Ẩn" : "Hiện";
+  passwordToggle.classList.toggle("is-visible", isPasswordHidden);
   passwordToggle.setAttribute("aria-label", isPasswordHidden ? "Ẩn mật khẩu" : "Hiện mật khẩu");
   passwordToggle.setAttribute("aria-pressed", String(isPasswordHidden));
 });
