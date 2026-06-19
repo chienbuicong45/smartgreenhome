@@ -354,6 +354,50 @@ h2 {
   padding: 20px;
 }
 
+.chart-card,
+.history-card {
+  position: relative;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 4;
+  display: none;
+  min-width: 140px;
+  transform: translate(-50%, calc(-100% - 12px));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #fff;
+  background: #26332e;
+  box-shadow: 0 10px 28px rgba(26, 46, 35, 0.2);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chart-tooltip.is-visible {
+  display: block;
+}
+
+.chart-tooltip strong,
+.chart-tooltip span {
+  display: block;
+}
+
+.chart-tooltip span {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+}
+
+.chart-tooltip.temperature-tooltip {
+  background: #a94736;
+}
+
+.chart-tooltip.humidity-tooltip {
+  background: #226b9e;
+}
+
 .history-card {
   margin-top: 18px;
 }

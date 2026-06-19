@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Greenhouse Monitor</title>
-    <link rel="stylesheet" href="./styles.css?v=5" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
   </head>
   <body>
     <main id="authView" class="auth-view">
@@ -116,6 +116,7 @@
             </div>
           </div>
           <canvas id="environmentChart" aria-label="Biểu đồ nhiệt độ và độ ẩm"></canvas>
+          <div id="realtimeTooltip" class="chart-tooltip" role="status"></div>
         </article>
 
         <aside class="side-panel">
@@ -150,9 +151,10 @@
           </div>
         </div>
         <canvas id="historyChart" aria-label="Biểu đồ dữ liệu lịch sử theo ngày"></canvas>
+        <div id="historyTooltip" class="chart-tooltip" role="status"></div>
       </section>
     </main>
 
-    <script src="./script.js?v=8"></script>
+    <script src="./script.js?v=9"></script>
   </body>
 </html>

@@ -39,6 +39,8 @@ const historyDaySelect = document.querySelector("#historyDaySelect");
 const historyStatus = document.querySelector("#historyStatus");
 const historyChart = document.querySelector("#historyChart");
 const historyContext = historyChart.getContext("2d");
+const realtimeTooltip = document.querySelector("#realtimeTooltip");
+const historyTooltip = document.querySelector("#historyTooltip");
 
 const maxPoints = 60;
 const historyDays = 7;
@@ -516,6 +518,93 @@ function drawHistoryLine(color, field, min, max, padding, plotWidth, plotHeight)
   historyContext.stroke();
 }
 
+function showReadingTooltip(event, isHistory) {
+  const targetChart = isHistory ? historyChart : chart;
+  const tooltip = isHistory ? historyTooltip : realtimeTooltip;
+  const source = isHistory ? historyReadings : readings;
+  const rect = targetChart.getBoundingClientRect();
+
+  if (!source.length || !rect.width || !rect.height) {
+    tooltip.classList.remove("is-visible");
+    return;
+  }
+
+  const padding = isHistory
+    ? { top: 20, right: 18, bottom: 36, left: 42 }
+    : { top: 20, right: 18, bottom: 32, left: 42 };
+  const plotWidth = rect.width - padding.left - padding.right;
+  const plotHeight = rect.height - padding.top - padding.bottom;
+  const pointerX = event.clientX - rect.left;
+  const pointerY = event.clientY - rect.top;
+  const denominator = isHistory
+    ? Math.max(source.length - 1, 1)
+    : maxPoints - 1;
+  const step = plotWidth / denominator;
+
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  source.forEach((reading, index) => {
+    const pointX = isHistory && source.length === 1
+      ? padding.left + plotWidth / 2
+      : padding.left + step * index;
+    const distance = Math.abs(pointerX - pointX);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  if (nearestDistance > Math.max(14, step / 2 + 4)) {
+    tooltip.classList.remove("is-visible");
+    return;
+  }
+
+  const reading = source[nearestIndex];
+  const position = isHistory && source.length === 1
+    ? 0
+    : clamp((pointerX - padding.left) / step, 0, source.length - 1);
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.min(source.length - 1, Math.ceil(position));
+  const progress = position - lowerIndex;
+  const hoverTemperature = source[lowerIndex].temperature
+    + (source[upperIndex].temperature - source[lowerIndex].temperature) * progress;
+  const hoverHumidity = source[lowerIndex].humidity
+    + (source[upperIndex].humidity - source[lowerIndex].humidity) * progress;
+  const temperatureY = padding.top + plotHeight
+    - clamp((hoverTemperature - 18) / (40 - 18), 0, 1) * plotHeight;
+  const humidityY = padding.top + plotHeight
+    - clamp((hoverHumidity - 30) / (100 - 30), 0, 1) * plotHeight;
+  const isTemperature = Math.abs(pointerY - temperatureY) <= Math.abs(pointerY - humidityY);
+  const pointY = isTemperature ? temperatureY : humidityY;
+
+  if (Math.abs(pointerY - pointY) > 30) {
+    tooltip.classList.remove("is-visible");
+    return;
+  }
+
+  const label = isTemperature ? "Nhiệt độ" : "Độ ẩm";
+  const value = isTemperature ? `${reading.temperature.toFixed(1)}°C` : `${reading.humidity}%`;
+  const time = reading.time.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: isHistory ? undefined : "2-digit",
+  });
+  const cardRect = targetChart.parentElement.getBoundingClientRect();
+  const tooltipX = Math.min(cardRect.width - 80, Math.max(80, event.clientX - cardRect.left));
+  const tooltipY = event.clientY - cardRect.top;
+
+  tooltip.className = `chart-tooltip is-visible ${isTemperature ? "temperature-tooltip" : "humidity-tooltip"}`;
+  tooltip.innerHTML = `<strong>${label}: ${value}</strong><span>${time}</span>`;
+  tooltip.style.left = `${tooltipX}px`;
+  tooltip.style.top = `${tooltipY}px`;
+}
+
+function hideReadingTooltip(tooltip) {
+  tooltip.classList.remove("is-visible");
+}
+
 function pushReading(reading) {
   readings.push(reading);
 
@@ -565,6 +654,10 @@ logoutButton.addEventListener("click", async () => {
 });
 
 historyDaySelect.addEventListener("change", loadHistoryForSelectedDay);
+chart.addEventListener("pointermove", (event) => showReadingTooltip(event, false));
+chart.addEventListener("pointerleave", () => hideReadingTooltip(realtimeTooltip));
+historyChart.addEventListener("pointermove", (event) => showReadingTooltip(event, true));
+historyChart.addEventListener("pointerleave", () => hideReadingTooltip(historyTooltip));
 
 window.addEventListener("resize", () => {
   resizeCanvas();
