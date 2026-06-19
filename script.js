@@ -44,13 +44,13 @@ const maxPoints = 60;
 const historyDays = 7;
 const readings = [];
 let historyReadings = [];
-let historyRequestId = 0;
 
 let auth = null;
 let db = null;
 let authApi = null;
 let firestoreApi = null;
 let unsubscribeReadings = null;
+let unsubscribeHistory = null;
 let latestReading = null;
 let latestReadingReceivedAt = 0;
 let chartIntervalId = null;
@@ -79,6 +79,7 @@ function showAuthView(message = "") {
   dashboardView.hidden = true;
   authMessage.textContent = message;
   stopReadingFirestore();
+  stopHistoryFirestore();
   stopChartPlayback();
 }
 
@@ -216,41 +217,42 @@ function configureHistoryPicker() {
   historyDaySelect.value = formatDateValue(today);
 }
 
-async function loadHistoryForSelectedDay() {
+function loadHistoryForSelectedDay() {
   if (!db || !firestoreApi || !historyDaySelect.value) return;
 
-  const requestId = ++historyRequestId;
+  stopHistoryFirestore();
   const start = new Date(`${historyDaySelect.value}T00:00:00`);
   const end = new Date(start);
   end.setDate(start.getDate() + 1);
-  historyStatus.textContent = "Đang tải dữ liệu lịch sử...";
+  historyStatus.textContent = "Đang kết nối dữ liệu lịch sử...";
 
-  try {
-    const historyRef = firestoreApi.collection(db, firestorePath.historyCollection);
-    const historyQuery = firestoreApi.query(
-      historyRef,
-      firestoreApi.where("recordedAt", ">=", firestoreApi.Timestamp.fromDate(start)),
-      firestoreApi.where("recordedAt", "<", firestoreApi.Timestamp.fromDate(end)),
-      firestoreApi.orderBy("recordedAt", "asc"),
-    );
-    const snapshot = await firestoreApi.getDocs(historyQuery);
-    if (requestId !== historyRequestId) return;
+  const historyRef = firestoreApi.collection(db, firestorePath.historyCollection);
+  const historyQuery = firestoreApi.query(
+    historyRef,
+    firestoreApi.where("recordedAt", ">=", firestoreApi.Timestamp.fromDate(start)),
+    firestoreApi.where("recordedAt", "<", firestoreApi.Timestamp.fromDate(end)),
+    firestoreApi.orderBy("recordedAt", "asc"),
+  );
 
-    historyReadings = snapshot.docs
-      .map((document) => normalizeReading(document.data()))
-      .filter(Boolean);
+  unsubscribeHistory = firestoreApi.onSnapshot(
+    historyQuery,
+    (snapshot) => {
+      historyReadings = snapshot.docs
+        .map((document) => normalizeReading(document.data()))
+        .filter(Boolean);
 
-    historyStatus.textContent = historyReadings.length
-      ? `${historyReadings.length} mẫu trong ngày ${start.toLocaleDateString("vi-VN")}`
-      : `Chưa có dữ liệu ngày ${start.toLocaleDateString("vi-VN")}`;
-    resizeHistoryCanvas();
-  } catch (error) {
-    if (requestId !== historyRequestId) return;
-    console.error(error);
-    historyReadings = [];
-    historyStatus.textContent = `Không tải được lịch sử: ${getFirebaseErrorText(error)}`;
-    resizeHistoryCanvas();
-  }
+      historyStatus.textContent = historyReadings.length
+        ? `${historyReadings.length} mẫu trong ngày ${start.toLocaleDateString("vi-VN")} - đang cập nhật`
+        : `Chưa có dữ liệu ngày ${start.toLocaleDateString("vi-VN")} - đang theo dõi`;
+      resizeHistoryCanvas();
+    },
+    (error) => {
+      console.error(error);
+      historyReadings = [];
+      historyStatus.textContent = `Không theo dõi được lịch sử: ${getFirebaseErrorText(error)}`;
+      resizeHistoryCanvas();
+    },
+  );
 }
 
 function startChartPlayback() {
@@ -276,6 +278,12 @@ function stopReadingFirestore() {
   if (!unsubscribeReadings) return;
   unsubscribeReadings();
   unsubscribeReadings = null;
+}
+
+function stopHistoryFirestore() {
+  if (!unsubscribeHistory) return;
+  unsubscribeHistory();
+  unsubscribeHistory = null;
 }
 
 function clamp(value, min, max) {
@@ -548,6 +556,7 @@ logoutButton.addEventListener("click", async () => {
     readings.splice(0, readings.length);
     historyReadings = [];
     eventLog.innerHTML = "";
+    stopHistoryFirestore();
     stopChartPlayback();
   } catch (error) {
     console.error(error);
@@ -564,6 +573,7 @@ window.addEventListener("resize", () => {
 window.addEventListener("beforeunload", () => {
   stopChartPlayback();
   stopReadingFirestore();
+  stopHistoryFirestore();
 });
 
 setupFirebase();
