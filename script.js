@@ -12,6 +12,7 @@ const firestorePath = {
   collection: "greenhouse_readings",
   document: "current",
   historyCollection: "greenhouse_history",
+  mailCollection: "mail",
 };
 
 const authView = document.querySelector("#authView");
@@ -48,10 +49,17 @@ const humidityMinInput = document.querySelector("#humidityMinInput");
 const humidityMaxInput = document.querySelector("#humidityMaxInput");
 const thresholdMessage = document.querySelector("#thresholdMessage");
 const resetThresholdsButton = document.querySelector("#resetThresholdsButton");
+const emailNotificationForm = document.querySelector("#emailNotificationForm");
+const notificationEmailInput = document.querySelector("#notificationEmailInput");
+const emailNotificationEnabledInput = document.querySelector("#emailNotificationEnabledInput");
+const emailNotificationMessage = document.querySelector("#emailNotificationMessage");
 
 const maxPoints = 60;
 const historyDays = 7;
 const thresholdStorageKey = "greenhouse-alert-thresholds";
+const emailNotificationStorageKey = "greenhouse-email-notifications";
+const emailLastSentStorageKey = "greenhouse-email-last-sent";
+const emailNotificationCooldown = 15 * 60 * 1000;
 const defaultThresholds = Object.freeze({
   temperatureMin: 24,
   temperatureMax: 32,
@@ -61,6 +69,8 @@ const defaultThresholds = Object.freeze({
 const readings = [];
 let historyReadings = [];
 let alertThresholds = loadThresholds();
+let emailNotificationSettings = loadEmailNotificationSettings();
+const lastEmailSentAt = loadEmailLastSentAt();
 
 let auth = null;
 let db = null;
@@ -154,6 +164,10 @@ async function setupFirebase() {
       eventLog.replaceChildren();
       connectionText.textContent = "Đang kết nối Firestore";
       addEvent(`Đã đăng nhập: ${user.email}`);
+      if (!emailNotificationSettings.email) {
+        emailNotificationSettings.email = user.email || "";
+        fillEmailNotificationForm();
+      }
       listenToReadings();
       configureHistoryPicker();
       loadHistoryForSelectedDay();
@@ -338,6 +352,76 @@ function fillThresholdForm() {
   humidityMaxInput.value = alertThresholds.humidityMax;
 }
 
+function loadEmailNotificationSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(emailNotificationStorageKey));
+    return {
+      enabled: saved?.enabled === true,
+      email: typeof saved?.email === "string" ? saved.email : "",
+    };
+  } catch {
+    return { enabled: false, email: "" };
+  }
+}
+
+function fillEmailNotificationForm() {
+  notificationEmailInput.value = emailNotificationSettings.email;
+  emailNotificationEnabledInput.checked = emailNotificationSettings.enabled;
+}
+
+function loadEmailLastSentAt() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(emailLastSentStorageKey));
+    const entries = Object.entries(saved || {}).filter(([, value]) => Number.isFinite(value));
+    return new Map(entries);
+  } catch {
+    return new Map();
+  }
+}
+
+function rememberEmailSentAt(alertKey, sentAt) {
+  lastEmailSentAt.set(alertKey, sentAt);
+  try {
+    localStorage.setItem(emailLastSentStorageKey, JSON.stringify(Object.fromEntries(lastEmailSentAt)));
+  } catch {
+    // The in-memory cooldown still applies for the current session.
+  }
+}
+
+async function queueAlertEmail(alertKey, message, reading) {
+  if (!emailNotificationSettings.enabled || !emailNotificationSettings.email || !db || !firestoreApi) return;
+
+  const now = Date.now();
+  const previousSentAt = lastEmailSentAt.get(alertKey) || 0;
+  if (now - previousSentAt < emailNotificationCooldown) return;
+  rememberEmailSentAt(alertKey, now);
+
+  const recordedAt = reading.time.toLocaleString("vi-VN");
+  const body = [
+    message,
+    `Nhiệt độ: ${reading.temperature}°C`,
+    `Độ ẩm: ${reading.humidity}%`,
+    `Thời gian: ${recordedAt}`,
+  ].join("\n");
+
+  try {
+    await firestoreApi.addDoc(
+      firestoreApi.collection(db, firestorePath.mailCollection),
+      {
+        to: emailNotificationSettings.email,
+        message: {
+          subject: `[Greenhouse] ${message}`,
+          text: body,
+        },
+      },
+    );
+    addEvent(`Đã xếp hàng email cảnh báo tới ${emailNotificationSettings.email}`);
+  } catch (error) {
+    console.error(error);
+    addEvent(`Không thể tạo email cảnh báo: ${getFirebaseErrorText(error)}`, "danger");
+  }
+}
+
 function getTemperatureStatus(value) {
   if (value < 24) return ["Hơi lạnh, cần kiểm tra nhiệt độ", "warning"];
   if (value > 32) return ["Nhiệt độ cao, cần theo dõi", "danger"];
@@ -386,6 +470,8 @@ function updateDashboard(reading) {
 
   if (tempLevel !== "normal") addEvent(tempMessage, tempLevel);
   if (humidityLevel !== "normal") addEvent(humidityMessage, humidityLevel);
+  if (tempLevel !== "normal") void queueAlertEmail(`temperature-${tempLevel}`, tempMessage, reading);
+  if (humidityLevel !== "normal") void queueAlertEmail(`humidity-${humidityLevel}`, humidityMessage, reading);
 }
 
 function addEvent(message, level = "normal") {
@@ -773,6 +859,38 @@ resetThresholdsButton.addEventListener("click", () => {
   thresholdMessage.classList.remove("error");
   if (latestReading) updateDashboard(latestReading);
 });
+emailNotificationForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!emailNotificationForm.checkValidity()) {
+    emailNotificationForm.reportValidity();
+    return;
+  }
+
+  const nextSettings = {
+    enabled: emailNotificationEnabledInput.checked,
+    email: notificationEmailInput.value.trim(),
+  };
+
+  try {
+    localStorage.setItem(emailNotificationStorageKey, JSON.stringify(nextSettings));
+  } catch {
+    emailNotificationMessage.textContent = "Trình duyệt không cho phép lưu cấu hình.";
+    emailNotificationMessage.classList.add("error");
+    return;
+  }
+
+  emailNotificationSettings = nextSettings;
+  lastEmailSentAt.clear();
+  try {
+    localStorage.removeItem(emailLastSentStorageKey);
+  } catch {
+    // A newly saved configuration still applies without persistent cooldown state.
+  }
+  emailNotificationMessage.textContent = nextSettings.enabled
+    ? "Đã bật thông báo qua email."
+    : "Đã tắt thông báo qua email.";
+  emailNotificationMessage.classList.remove("error");
+});
 chart.addEventListener("pointermove", (event) => showReadingTooltip(event, false));
 chart.addEventListener("pointerleave", () => hideReadingTooltip(realtimeTooltip));
 historyChart.addEventListener("pointermove", (event) => showReadingTooltip(event, true));
@@ -792,4 +910,5 @@ window.addEventListener("beforeunload", () => {
 });
 
 fillThresholdForm();
+fillEmailNotificationForm();
 setupFirebase();

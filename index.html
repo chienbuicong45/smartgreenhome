@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#2f8a5f" />
     <title>Greenhouse Monitor</title>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="./styles.css?v=7" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
   </head>
   <body>
     <main id="authView" class="auth-view">
@@ -149,6 +149,28 @@
             </form>
           </article>
 
+          <article class="settings-card">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Thông báo</p>
+                <h2>Gửi cảnh báo qua email</h2>
+              </div>
+            </div>
+            <form id="emailNotificationForm" class="notification-form">
+              <label>
+                <span>Email nhận cảnh báo</span>
+                <input id="notificationEmailInput" type="email" autocomplete="email" placeholder="name@example.com" required />
+              </label>
+              <label class="switch-row">
+                <input id="emailNotificationEnabledInput" type="checkbox" />
+                <span>Bật thông báo qua email</span>
+              </label>
+              <p class="notification-note">Cần cài Firebase Trigger Email cho collection <strong>mail</strong>. Mỗi loại cảnh báo được gửi tối đa một lần trong 15 phút.</p>
+              <p id="emailNotificationMessage" class="threshold-message" role="status" aria-live="polite"></p>
+              <button type="submit">Lưu cấu hình email</button>
+            </form>
+          </article>
+
           <article class="log-card">
             <div class="section-head compact">
               <div>
@@ -184,6 +206,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=10"></script>
+    <script src="./script.js?v=11"></script>
   </body>
 </html>
