@@ -41,11 +41,26 @@ const historyChart = document.querySelector("#historyChart");
 const historyContext = historyChart.getContext("2d");
 const realtimeTooltip = document.querySelector("#realtimeTooltip");
 const historyTooltip = document.querySelector("#historyTooltip");
+const thresholdForm = document.querySelector("#thresholdForm");
+const temperatureMinInput = document.querySelector("#temperatureMinInput");
+const temperatureMaxInput = document.querySelector("#temperatureMaxInput");
+const humidityMinInput = document.querySelector("#humidityMinInput");
+const humidityMaxInput = document.querySelector("#humidityMaxInput");
+const thresholdMessage = document.querySelector("#thresholdMessage");
+const resetThresholdsButton = document.querySelector("#resetThresholdsButton");
 
 const maxPoints = 60;
 const historyDays = 7;
+const thresholdStorageKey = "greenhouse-alert-thresholds";
+const defaultThresholds = Object.freeze({
+  temperatureMin: 24,
+  temperatureMax: 32,
+  humidityMin: 55,
+  humidityMax: 82,
+});
 const readings = [];
 let historyReadings = [];
+let alertThresholds = loadThresholds();
 
 let auth = null;
 let db = null;
@@ -293,6 +308,36 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function areValidThresholds(value) {
+  return value
+    && Number.isFinite(value.temperatureMin)
+    && Number.isFinite(value.temperatureMax)
+    && Number.isFinite(value.humidityMin)
+    && Number.isFinite(value.humidityMax)
+    && value.temperatureMin < value.temperatureMax
+    && value.temperatureMin >= -20
+    && value.temperatureMax <= 80
+    && value.humidityMin < value.humidityMax
+    && value.humidityMin >= 0
+    && value.humidityMax <= 100;
+}
+
+function loadThresholds() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(thresholdStorageKey));
+    return areValidThresholds(saved) ? saved : { ...defaultThresholds };
+  } catch {
+    return { ...defaultThresholds };
+  }
+}
+
+function fillThresholdForm() {
+  temperatureMinInput.value = alertThresholds.temperatureMin;
+  temperatureMaxInput.value = alertThresholds.temperatureMax;
+  humidityMinInput.value = alertThresholds.humidityMin;
+  humidityMaxInput.value = alertThresholds.humidityMax;
+}
+
 function getTemperatureStatus(value) {
   if (value < 24) return ["Hơi lạnh, cần kiểm tra nhiệt độ", "warning"];
   if (value > 32) return ["Nhiệt độ cao, cần theo dõi", "danger"];
@@ -311,9 +356,21 @@ function calculateHealth(temperature, humidity) {
   return Math.round(clamp((tempScore + humidityScore) / 2, 0, 100));
 }
 
+function getConfiguredTemperatureStatus(value) {
+  if (value < alertThresholds.temperatureMin) return ["Nhiệt độ thấp hơn ngưỡng cảnh báo", "warning"];
+  if (value > alertThresholds.temperatureMax) return ["Nhiệt độ cao hơn ngưỡng cảnh báo", "danger"];
+  return ["Trong ngưỡng đã cấu hình", "normal"];
+}
+
+function getConfiguredHumidityStatus(value) {
+  if (value < alertThresholds.humidityMin) return ["Độ ẩm thấp hơn ngưỡng cảnh báo", "warning"];
+  if (value > alertThresholds.humidityMax) return ["Độ ẩm cao hơn ngưỡng cảnh báo", "danger"];
+  return ["Trong ngưỡng đã cấu hình", "normal"];
+}
+
 function updateDashboard(reading) {
-  const [tempMessage, tempLevel] = getTemperatureStatus(reading.temperature);
-  const [humidityMessage, humidityLevel] = getHumidityStatus(reading.humidity);
+  const [tempMessage, tempLevel] = getConfiguredTemperatureStatus(reading.temperature);
+  const [humidityMessage, humidityLevel] = getConfiguredHumidityStatus(reading.humidity);
   const health = calculateHealth(reading.temperature, reading.humidity);
 
   temperatureValue.textContent = `${reading.temperature}°C`;
@@ -669,6 +726,53 @@ logoutButton.addEventListener("click", async () => {
 });
 
 historyDaySelect.addEventListener("change", loadHistoryForSelectedDay);
+thresholdForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const nextThresholds = {
+    temperatureMin: Number(temperatureMinInput.value),
+    temperatureMax: Number(temperatureMaxInput.value),
+    humidityMin: Number(humidityMinInput.value),
+    humidityMax: Number(humidityMaxInput.value),
+  };
+
+  if (!thresholdForm.checkValidity()) {
+    thresholdForm.reportValidity();
+    return;
+  }
+
+  if (!areValidThresholds(nextThresholds)) {
+    thresholdMessage.textContent = "Ngưỡng tối thiểu phải nhỏ hơn ngưỡng tối đa.";
+    thresholdMessage.classList.add("error");
+    return;
+  }
+
+  try {
+    localStorage.setItem(thresholdStorageKey, JSON.stringify(nextThresholds));
+  } catch {
+    thresholdMessage.textContent = "Trình duyệt không cho phép lưu cấu hình.";
+    thresholdMessage.classList.add("error");
+    return;
+  }
+
+  alertThresholds = nextThresholds;
+  thresholdMessage.textContent = "Đã lưu ngưỡng cảnh báo.";
+  thresholdMessage.classList.remove("error");
+  if (latestReading) updateDashboard(latestReading);
+});
+
+resetThresholdsButton.addEventListener("click", () => {
+  alertThresholds = { ...defaultThresholds };
+  try {
+    localStorage.removeItem(thresholdStorageKey);
+  } catch {
+    // The in-memory defaults still apply for the current session.
+  }
+  fillThresholdForm();
+  thresholdMessage.textContent = "Đã khôi phục ngưỡng mặc định.";
+  thresholdMessage.classList.remove("error");
+  if (latestReading) updateDashboard(latestReading);
+});
 chart.addEventListener("pointermove", (event) => showReadingTooltip(event, false));
 chart.addEventListener("pointerleave", () => hideReadingTooltip(realtimeTooltip));
 historyChart.addEventListener("pointermove", (event) => showReadingTooltip(event, true));
@@ -687,4 +791,5 @@ window.addEventListener("beforeunload", () => {
   stopHistoryFirestore();
 });
 
+fillThresholdForm();
 setupFirebase();

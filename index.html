@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#2f8a5f" />
     <title>Greenhouse Monitor</title>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link rel="stylesheet" href="./styles.css?v=7" />
   </head>
   <body>
     <main id="authView" class="auth-view">
@@ -123,6 +123,32 @@
         </article>
 
         <aside class="side-panel">
+          <article class="settings-card">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Cấu hình</p>
+                <h2>Ngưỡng cảnh báo</h2>
+              </div>
+            </div>
+            <form id="thresholdForm" class="threshold-form">
+              <fieldset>
+                <legend>Nhiệt độ (°C)</legend>
+                <label><span>Tối thiểu</span><input id="temperatureMinInput" type="number" min="-20" max="80" step="0.1" required /></label>
+                <label><span>Tối đa</span><input id="temperatureMaxInput" type="number" min="-20" max="80" step="0.1" required /></label>
+              </fieldset>
+              <fieldset>
+                <legend>Độ ẩm (%)</legend>
+                <label><span>Tối thiểu</span><input id="humidityMinInput" type="number" min="0" max="100" step="1" required /></label>
+                <label><span>Tối đa</span><input id="humidityMaxInput" type="number" min="0" max="100" step="1" required /></label>
+              </fieldset>
+              <p id="thresholdMessage" class="threshold-message" role="status" aria-live="polite"></p>
+              <div class="threshold-actions">
+                <button type="submit">Lưu ngưỡng</button>
+                <button id="resetThresholdsButton" class="secondary-button" type="button">Mặc định</button>
+              </div>
+            </form>
+          </article>
+
           <article class="log-card">
             <div class="section-head compact">
               <div>
@@ -158,6 +184,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=9"></script>
+    <script src="./script.js?v=10"></script>
   </body>
 </html>

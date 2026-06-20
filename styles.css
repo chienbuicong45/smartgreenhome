@@ -284,6 +284,7 @@ h2 {
 .metric,
 .chart-card,
 .log-card,
+.settings-card,
 .history-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -356,9 +357,22 @@ h2 {
 
 .chart-card,
 .log-card,
+.settings-card,
 .history-card {
   padding: 20px;
 }
+
+.threshold-form { display: grid; gap: 14px; }
+.threshold-form fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; border: 0; padding: 0; }
+.threshold-form legend { grid-column: 1 / -1; margin-bottom: 7px; padding: 0; font-weight: 800; }
+.threshold-form label { display: grid; gap: 6px; color: var(--muted); font-size: 0.82rem; font-weight: 700; }
+.threshold-form input { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; color: var(--ink); background: var(--paper); outline: none; }
+.threshold-form input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(47, 138, 95, 0.14); }
+.threshold-message { min-height: 20px; margin: -2px 0 0; color: var(--muted); font-size: 0.82rem; }
+.threshold-message.error { color: var(--red); }
+.threshold-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.threshold-actions button { min-height: 40px; border: 0; border-radius: 8px; padding: 0 12px; color: #fff; background: var(--green); font-weight: 800; cursor: pointer; }
+.threshold-actions .secondary-button { border: 1px solid var(--line); color: var(--ink); background: var(--paper); }
 
 .chart-card,
 .history-card {
@@ -574,6 +588,7 @@ h2 {
   .metric,
   .chart-card,
   .log-card,
+  .settings-card,
   .history-card {
     padding: 16px;
   }
