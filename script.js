@@ -40,6 +40,7 @@ const humidityStatus = document.querySelector("#humidityStatus");
 const healthStatus = document.querySelector("#healthStatus");
 const connectionText = document.querySelector("#connectionText");
 const eventLog = document.querySelector("#eventLog");
+const loginHistoryLog = document.querySelector("#loginHistoryLog");
 const chart = document.querySelector("#environmentChart");
 const context = chart.getContext("2d");
 const historyDaySelect = document.querySelector("#historyDaySelect");
@@ -70,6 +71,7 @@ const maxPoints = 60;
 const historyDays = 7;
 const thresholdStorageKey = "greenhouse-alert-thresholds";
 const emailNotificationStorageKey = "greenhouse-email-notifications";
+const loginHistoryStorageKey = "greenhouse-login-history";
 const emailLastSentStorageKey = "greenhouse-email-last-sent";
 const emailNotificationCooldown = 15 * 60 * 1000;
 const defaultThresholds = Object.freeze({
@@ -174,6 +176,7 @@ async function setupFirebase() {
       showDashboardView();
       readings.splice(0, readings.length);
       eventLog.replaceChildren();
+      renderLoginHistory();
       connectionText.textContent = "Đang kết nối Firestore";
       addEvent(`Đã đăng nhập: ${user.email}`);
       if (!emailNotificationSettings.email) {
@@ -545,6 +548,53 @@ function addEvent(message, level = "normal") {
   }
 }
 
+function loadLoginHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(loginHistoryStorageKey));
+    return Array.isArray(saved)
+      ? saved.filter((entry) => typeof entry?.email === "string" && Number.isFinite(entry?.timestamp)).slice(0, 10)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderLoginHistory() {
+  const history = loadLoginHistory();
+  loginHistoryLog.replaceChildren();
+
+  if (!history.length) {
+    const emptyItem = document.createElement("li");
+    emptyItem.className = "empty-log-item";
+    emptyItem.textContent = "Chưa có lần đăng nhập nào được lưu trên thiết bị này.";
+    loginHistoryLog.append(emptyItem);
+    return;
+  }
+
+  history.forEach((entry) => {
+    const item = document.createElement("li");
+    const time = document.createElement("strong");
+    const email = document.createElement("span");
+    time.textContent = new Date(entry.timestamp).toLocaleString("vi-VN");
+    email.textContent = entry.email;
+    item.append(time, email);
+    loginHistoryLog.append(item);
+  });
+}
+
+function rememberSuccessfulLogin(email) {
+  const history = loadLoginHistory();
+  history.unshift({ email, timestamp: Date.now() });
+
+  try {
+    localStorage.setItem(loginHistoryStorageKey, JSON.stringify(history.slice(0, 10)));
+  } catch {
+    // The login still succeeds when the browser blocks local storage.
+  }
+
+  renderLoginHistory();
+}
+
 function resizeCanvas() {
   const ratio = window.devicePixelRatio || 1;
   const rect = chart.getBoundingClientRect();
@@ -834,7 +884,8 @@ loginForm.addEventListener("submit", async (event) => {
   loginButton.disabled = true;
 
   try {
-    await authApi.signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+    const credential = await authApi.signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+    rememberSuccessfulLogin(credential.user.email || emailInput.value.trim());
     loginForm.reset();
     hidePassword();
     authMessage.textContent = "";

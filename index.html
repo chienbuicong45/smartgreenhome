@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#2f8a5f" />
     <title>Greenhouse Monitor</title>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="./styles.css?v=8" />
+    <link rel="stylesheet" href="./styles.css?v=9" />
   </head>
   <body>
     <main id="authView" class="auth-view">
@@ -180,6 +180,16 @@
             </div>
             <ul id="eventLog" class="event-log" role="log" aria-live="polite"></ul>
           </article>
+
+          <article class="log-card">
+            <div class="section-head compact">
+              <div>
+                <p class="eyebrow">Tài khoản</p>
+                <h2>Nhật ký đăng nhập</h2>
+              </div>
+            </div>
+            <ul id="loginHistoryLog" class="event-log login-history-log" aria-live="polite"></ul>
+          </article>
         </aside>
       </section>
 
@@ -220,6 +230,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=13"></script>
+    <script src="./script.js?v=14"></script>
   </body>
 </html>
