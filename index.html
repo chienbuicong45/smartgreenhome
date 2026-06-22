@@ -201,11 +201,25 @@
             <span><i class="humid-dot"></i>Độ ẩm</span>
           </div>
         </div>
+        <div class="history-stats" aria-label="Thống kê dữ liệu trong ngày">
+          <div class="history-stat-row temperature-stats">
+            <strong>Nhiệt độ</strong>
+            <span>Nhỏ nhất <b id="temperatureHistoryMin">--</b></span>
+            <span>Lớn nhất <b id="temperatureHistoryMax">--</b></span>
+            <span>Trung bình <b id="temperatureHistoryAverage">--</b></span>
+          </div>
+          <div class="history-stat-row humidity-stats">
+            <strong>Độ ẩm</strong>
+            <span>Nhỏ nhất <b id="humidityHistoryMin">--</b></span>
+            <span>Lớn nhất <b id="humidityHistoryMax">--</b></span>
+            <span>Trung bình <b id="humidityHistoryAverage">--</b></span>
+          </div>
+        </div>
         <canvas id="historyChart" aria-label="Biểu đồ dữ liệu lịch sử theo ngày"></canvas>
         <div id="historyTooltip" class="chart-tooltip" role="status"></div>
       </section>
     </main>
 
-    <script src="./script.js?v=12"></script>
+    <script src="./script.js?v=13"></script>
   </body>
 </html>

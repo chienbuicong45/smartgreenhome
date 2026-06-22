@@ -48,6 +48,12 @@ const historyChart = document.querySelector("#historyChart");
 const historyContext = historyChart.getContext("2d");
 const realtimeTooltip = document.querySelector("#realtimeTooltip");
 const historyTooltip = document.querySelector("#historyTooltip");
+const temperatureHistoryMin = document.querySelector("#temperatureHistoryMin");
+const temperatureHistoryMax = document.querySelector("#temperatureHistoryMax");
+const temperatureHistoryAverage = document.querySelector("#temperatureHistoryAverage");
+const humidityHistoryMin = document.querySelector("#humidityHistoryMin");
+const humidityHistoryMax = document.querySelector("#humidityHistoryMax");
+const humidityHistoryAverage = document.querySelector("#humidityHistoryAverage");
 const thresholdForm = document.querySelector("#thresholdForm");
 const temperatureMinInput = document.querySelector("#temperatureMinInput");
 const temperatureMaxInput = document.querySelector("#temperatureMaxInput");
@@ -259,6 +265,8 @@ function loadHistoryForSelectedDay() {
   if (!db || !firestoreApi || !historyDaySelect.value) return;
 
   stopHistoryFirestore();
+  historyReadings = [];
+  updateHistoryStatistics();
   const start = new Date(`${historyDaySelect.value}T00:00:00`);
   const end = new Date(start);
   end.setDate(start.getDate() + 1);
@@ -282,15 +290,51 @@ function loadHistoryForSelectedDay() {
       historyStatus.textContent = historyReadings.length
         ? `${historyReadings.length} mẫu trong ngày ${start.toLocaleDateString("vi-VN")} - đang cập nhật`
         : `Chưa có dữ liệu ngày ${start.toLocaleDateString("vi-VN")} - đang theo dõi`;
+      updateHistoryStatistics();
       resizeHistoryCanvas();
     },
     (error) => {
       console.error(error);
       historyReadings = [];
       historyStatus.textContent = `Không theo dõi được lịch sử: ${getFirebaseErrorText(error)}`;
+      updateHistoryStatistics();
       resizeHistoryCanvas();
     },
   );
+}
+
+function updateHistoryStatistics() {
+  const fields = [
+    {
+      key: "temperature",
+      minElement: temperatureHistoryMin,
+      maxElement: temperatureHistoryMax,
+      averageElement: temperatureHistoryAverage,
+      format: (value) => `${value.toFixed(1)}°C`,
+    },
+    {
+      key: "humidity",
+      minElement: humidityHistoryMin,
+      maxElement: humidityHistoryMax,
+      averageElement: humidityHistoryAverage,
+      format: (value) => `${value.toFixed(1)}%`,
+    },
+  ];
+
+  fields.forEach(({ key, minElement, maxElement, averageElement, format }) => {
+    if (!historyReadings.length) {
+      minElement.textContent = "--";
+      maxElement.textContent = "--";
+      averageElement.textContent = "--";
+      return;
+    }
+
+    const values = historyReadings.map((reading) => reading[key]);
+    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    minElement.textContent = format(Math.min(...values));
+    maxElement.textContent = format(Math.max(...values));
+    averageElement.textContent = format(average);
+  });
 }
 
 function startChartPlayback() {
