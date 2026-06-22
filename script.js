@@ -348,9 +348,27 @@ function updateExportButtonState() {
   exportCsvButton.disabled = historyReadings.length === 0;
 }
 
-function escapeCsvValue(value) {
+function escapeSpreadsheetValue(value) {
   const text = String(value ?? "");
   return `"${text.replaceAll('"', '""')}"`;
+}
+
+function encodeUtf16Le(text) {
+  const bytes = new Uint8Array(2 + text.length * 2);
+  bytes[0] = 0xff;
+  bytes[1] = 0xfe;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    bytes[2 + index * 2] = code & 0xff;
+    bytes[3 + index * 2] = code >> 8;
+  }
+
+  return bytes;
+}
+
+function formatSpreadsheetText(value) {
+  return `="${String(value).replaceAll('"', '""')}"`;
 }
 
 function calculateFieldStatistics(field) {
@@ -367,9 +385,10 @@ function exportHistoryCsv() {
 
   const temperatureStats = calculateFieldStatistics("temperature");
   const humidityStats = calculateFieldStatistics("humidity");
+  const selectedDate = new Date(`${historyDaySelect.value}T00:00:00`).toLocaleDateString("vi-VN");
   const rows = [
     ["BÁO CÁO DỮ LIỆU NHÀ KÍNH"],
-    ["Ngày", historyDaySelect.value],
+    [`Ngày báo cáo: ${selectedDate}`],
     ["Số mẫu", historyReadings.length],
     [],
     ["Chỉ số", "Nhỏ nhất", "Lớn nhất", "Trung bình"],
@@ -378,14 +397,16 @@ function exportHistoryCsv() {
     [],
     ["Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "Trạng thái (%)"],
     ...historyReadings.map((reading) => [
-      reading.time.toLocaleString("vi-VN"),
+      formatSpreadsheetText(reading.time.toLocaleString("vi-VN")),
       reading.temperature.toFixed(1),
       reading.humidity,
       calculateHealth(reading.temperature, reading.humidity),
     ]),
   ];
-  const csvContent = `sep=,\r\n${rows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n")}`;
-  const blob = new Blob(["\ufeff", csvContent], { type: "text/csv;charset=utf-8" });
+  const spreadsheetContent = rows
+    .map((row) => row.map(escapeSpreadsheetValue).join("\t"))
+    .join("\r\n");
+  const blob = new Blob([encodeUtf16Le(spreadsheetContent)], { type: "text/tab-separated-values;charset=utf-16le" });
   const url = URL.createObjectURL(blob);
   const downloadLink = document.createElement("a");
   downloadLink.href = url;
