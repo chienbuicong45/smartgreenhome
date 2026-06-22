@@ -73,9 +73,9 @@ const notificationEmailInput = document.querySelector("#notificationEmailInput")
 const emailNotificationEnabledInput = document.querySelector("#emailNotificationEnabledInput");
 const emailNotificationMessage = document.querySelector("#emailNotificationMessage");
 
-const expectedReadingIntervalMs = 10000;
-const connectionCheckIntervalMs = 5000;
-const deviceStaleAfterMs = 30000;
+const expectedReadingIntervalMs = 1000;
+const connectionCheckIntervalMs = 1000;
+const deviceStaleAfterMs = 15000;
 const historyDays = 7;
 const thresholdStorageKey = "greenhouse-alert-thresholds";
 const emailNotificationStorageKey = "greenhouse-email-notifications";
@@ -452,7 +452,7 @@ function checkDeviceConnection() {
   if (!latestReading || !latestReadingReceivedAt) return;
 
   const dataAge = Math.max(0, Date.now() - latestReadingReceivedAt);
-  if (dataAge > deviceStaleAfterMs) {
+  if (dataAge >= deviceStaleAfterMs) {
     if (!deviceIsOffline) {
       deviceIsOffline = true;
       const lastUpdateTime = latestReading.time.toLocaleTimeString("vi-VN");
