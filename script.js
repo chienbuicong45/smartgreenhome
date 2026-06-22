@@ -39,6 +39,7 @@ const temperatureStatus = document.querySelector("#temperatureStatus");
 const humidityStatus = document.querySelector("#humidityStatus");
 const healthStatus = document.querySelector("#healthStatus");
 const connectionText = document.querySelector("#connectionText");
+const connectionStatus = connectionText.closest(".status-pill");
 const eventLog = document.querySelector("#eventLog");
 const loginHistoryLog = document.querySelector("#loginHistoryLog");
 const chart = document.querySelector("#environmentChart");
@@ -72,7 +73,9 @@ const notificationEmailInput = document.querySelector("#notificationEmailInput")
 const emailNotificationEnabledInput = document.querySelector("#emailNotificationEnabledInput");
 const emailNotificationMessage = document.querySelector("#emailNotificationMessage");
 
-const chartPlaybackIntervalMs = 2000;
+const expectedReadingIntervalMs = 10000;
+const connectionCheckIntervalMs = 5000;
+const deviceStaleAfterMs = 30000;
 const historyDays = 7;
 const thresholdStorageKey = "greenhouse-alert-thresholds";
 const emailNotificationStorageKey = "greenhouse-email-notifications";
@@ -99,9 +102,10 @@ let unsubscribeReadings = null;
 let unsubscribeHistory = null;
 let latestReading = null;
 let latestReadingReceivedAt = 0;
-let chartIntervalId = null;
+let connectionMonitorIntervalId = null;
 let resizeFrameId = null;
 let chartRangeSeconds = Number(chartRangeSelect.value);
+let deviceIsOffline = false;
 
 function getFirebaseErrorText(error) {
   const code = error?.code || "unknown";
@@ -128,13 +132,20 @@ function showAuthView(message = "") {
   authMessage.textContent = message;
   stopReadingFirestore();
   stopHistoryFirestore();
-  stopChartPlayback();
+  stopConnectionMonitor();
 }
 
 function showDashboardView() {
   authView.hidden = true;
   dashboardView.hidden = false;
   requestAnimationFrame(resizeCanvas);
+}
+
+function setConnectionState(state, message) {
+  connectionText.textContent = message;
+  connectionStatus.classList.toggle("is-connecting", state === "connecting");
+  connectionStatus.classList.toggle("is-offline", state === "offline");
+  connectionStatus.classList.toggle("is-error", state === "error");
 }
 
 function hidePassword() {
@@ -184,7 +195,7 @@ async function setupFirebase() {
       updateRealtimeDataPresentation("Đang chờ dữ liệu từ thiết bị...");
       eventLog.replaceChildren();
       renderLoginHistory();
-      connectionText.textContent = "Đang kết nối Firestore";
+      setConnectionState("connecting", "Đang kết nối Firestore");
       addEvent(`Đã đăng nhập: ${user.email}`);
       if (!emailNotificationSettings.email) {
         emailNotificationSettings.email = user.email || "";
@@ -202,7 +213,7 @@ async function setupFirebase() {
 
 function listenToReadings() {
   stopReadingFirestore();
-  stopChartPlayback();
+  stopConnectionMonitor();
 
   const readingRef = firestoreApi.doc(db, firestorePath.collection, firestorePath.document);
 
@@ -210,7 +221,8 @@ function listenToReadings() {
     readingRef,
     (snapshot) => {
       if (!snapshot.exists()) {
-        connectionText.textContent = "Firestore sẵn sàng - chưa có dữ liệu";
+        stopConnectionMonitor();
+        setConnectionState("offline", "Thiết bị chưa có dữ liệu");
         readings.splice(0, readings.length);
         updateRealtimeDataPresentation("Chưa có dữ liệu để hiển thị.");
         drawChart();
@@ -220,6 +232,8 @@ function listenToReadings() {
 
       const latest = normalizeReading(snapshot.data());
       if (!latest) {
+        stopConnectionMonitor();
+        setConnectionState("error", "Dữ liệu thiết bị không hợp lệ");
         readings.splice(0, readings.length);
         updateRealtimeDataPresentation("Dữ liệu nhận được không hợp lệ.");
         drawChart();
@@ -228,14 +242,16 @@ function listenToReadings() {
       }
 
       latestReading = latest;
-      latestReadingReceivedAt = Date.now();
+      latestReadingReceivedAt = latest.time.getTime();
       pushReading(latest);
-      startChartPlayback();
+      startConnectionMonitor();
+      checkDeviceConnection();
       addEvent(`Đã kết nối document "${firestorePath.document}"`);
     },
     (error) => {
       console.error(error);
-      connectionText.textContent = "Lỗi đọc Firestore";
+      stopConnectionMonitor();
+      setConnectionState("error", "Lỗi đọc Firestore");
       readings.splice(0, readings.length);
       updateRealtimeDataPresentation("Không thể tải dữ liệu biểu đồ.");
       drawChart();
@@ -432,23 +448,39 @@ function exportHistoryCsv() {
   URL.revokeObjectURL(url);
 }
 
-function startChartPlayback() {
-  if (chartIntervalId) return;
+function checkDeviceConnection() {
+  if (!latestReading || !latestReadingReceivedAt) return;
 
-  chartIntervalId = setInterval(() => {
-    if (!latestReading || Date.now() - latestReadingReceivedAt < 1800) return;
+  const dataAge = Math.max(0, Date.now() - latestReadingReceivedAt);
+  if (dataAge > deviceStaleAfterMs) {
+    if (!deviceIsOffline) {
+      deviceIsOffline = true;
+      const lastUpdateTime = latestReading.time.toLocaleTimeString("vi-VN");
+      setConnectionState("offline", "Thiết bị ngoại tuyến");
+      updateRealtimeDataPresentation(`Mất kết nối thiết bị. Mẫu cuối được nhận lúc ${lastUpdateTime}.`);
+      addEvent("Thiết bị đã ngừng gửi dữ liệu", "danger");
+    }
+    return;
+  }
 
-    pushReading({
-      ...latestReading,
-      time: new Date(),
-    });
-  }, chartPlaybackIntervalMs);
+  const wasOffline = deviceIsOffline;
+  deviceIsOffline = false;
+  setConnectionState("online", `Cập nhật ${latestReading.time.toLocaleTimeString("vi-VN")}`);
+  updateRealtimeDataPresentation();
+  if (wasOffline) addEvent("Thiết bị đã kết nối và gửi dữ liệu trở lại");
 }
 
-function stopChartPlayback() {
-  clearInterval(chartIntervalId);
-  chartIntervalId = null;
+function startConnectionMonitor() {
+  if (connectionMonitorIntervalId) return;
+  connectionMonitorIntervalId = setInterval(checkDeviceConnection, connectionCheckIntervalMs);
+}
+
+function stopConnectionMonitor() {
+  clearInterval(connectionMonitorIntervalId);
+  connectionMonitorIntervalId = null;
   latestReading = null;
+  latestReadingReceivedAt = 0;
+  deviceIsOffline = false;
 }
 
 function stopReadingFirestore() {
@@ -615,7 +647,7 @@ function updateDashboard(reading) {
   temperatureStatus.textContent = tempMessage;
   humidityStatus.textContent = humidityMessage;
   healthStatus.textContent = health >= 75 ? "Môi trường ổn định" : "Cần theo dõi điều kiện";
-  connectionText.textContent = `Cập nhật ${reading.time.toLocaleTimeString("vi-VN")}`;
+  setConnectionState("online", `Cập nhật ${reading.time.toLocaleTimeString("vi-VN")}`);
 
   if (tempLevel !== "normal") addEvent(tempMessage, tempLevel);
   if (humidityLevel !== "normal") addEvent(humidityMessage, humidityLevel);
@@ -641,7 +673,7 @@ function addEvent(message, level = "normal") {
 }
 
 function getRealtimeMaxPoints() {
-  return Math.floor((chartRangeSeconds * 1000) / chartPlaybackIntervalMs) + 1;
+  return Math.floor((chartRangeSeconds * 1000) / expectedReadingIntervalMs) + 1;
 }
 
 function trimRealtimeReadings() {
@@ -1072,7 +1104,7 @@ logoutButton.addEventListener("click", async () => {
     historyReadings = [];
     eventLog.replaceChildren();
     stopHistoryFirestore();
-    stopChartPlayback();
+    stopConnectionMonitor();
   } catch (error) {
     console.error(error);
     addEvent(`Không thể đăng xuất: ${getFirebaseErrorText(error)}`, "danger");
@@ -1176,7 +1208,7 @@ window.addEventListener("resize", () => {
   });
 });
 window.addEventListener("beforeunload", () => {
-  stopChartPlayback();
+  stopConnectionMonitor();
   stopReadingFirestore();
   stopHistoryFirestore();
 });
