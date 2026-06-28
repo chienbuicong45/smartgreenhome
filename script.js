@@ -12,6 +12,8 @@ const firestorePath = {
   collection: "greenhouse_readings",
   document: "current",
   historyCollection: "greenhouse_history",
+  settingsCollection: "greenhouse_settings",
+  settingsDocument: "shared",
 };
 
 const emailJsConfig = Object.freeze({
@@ -110,6 +112,7 @@ let authApi = null;
 let firestoreApi = null;
 let unsubscribeReadings = null;
 let unsubscribeHistory = null;
+let unsubscribeSettings = null;
 let latestReading = null;
 let latestReadingReceivedAt = 0;
 let connectionMonitorIntervalId = null;
@@ -232,6 +235,7 @@ function showAuthView(message = "") {
   if (cameraStream) stopCamera();
   stopReadingFirestore();
   stopHistoryFirestore();
+  stopSettingsFirestore();
   stopConnectionMonitor();
 }
 
@@ -302,6 +306,7 @@ async function setupFirebase() {
         fillEmailNotificationForm();
       }
       listenToReadings();
+      listenToSettings();
       configureHistoryPicker();
       loadHistoryForSelectedDay();
     });
@@ -593,6 +598,83 @@ function stopHistoryFirestore() {
   if (!unsubscribeHistory) return;
   unsubscribeHistory();
   unsubscribeHistory = null;
+}
+
+function getSharedSettingsData() {
+  return {
+    ...alertThresholds,
+    email: emailNotificationSettings.email,
+    emailEnabled: emailNotificationSettings.enabled,
+  };
+}
+
+async function saveSharedSettings() {
+  if (!db || !firestoreApi) throw new Error("Firebase chưa sẵn sàng.");
+  const settingsRef = firestoreApi.doc(
+    db,
+    firestorePath.settingsCollection,
+    firestorePath.settingsDocument,
+  );
+  await firestoreApi.setDoc(
+    settingsRef,
+    {
+      ...getSharedSettingsData(),
+      updatedAt: firestoreApi.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+function applySharedSettings(data) {
+  const nextThresholds = {
+    temperatureMin: Number(data.temperatureMin),
+    temperatureMax: Number(data.temperatureMax),
+    humidityMin: Number(data.humidityMin),
+    humidityMax: Number(data.humidityMax),
+  };
+  if (areValidThresholds(nextThresholds)) {
+    alertThresholds = nextThresholds;
+    fillThresholdForm();
+    localStorage.setItem(thresholdStorageKey, JSON.stringify(nextThresholds));
+  }
+
+  emailNotificationSettings = {
+    email: typeof data.email === "string" ? data.email : emailNotificationSettings.email,
+    enabled: data.emailEnabled === true,
+  };
+  fillEmailNotificationForm();
+  localStorage.setItem(emailNotificationStorageKey, JSON.stringify(emailNotificationSettings));
+  if (latestReading) updateDashboard(latestReading);
+}
+
+function listenToSettings() {
+  stopSettingsFirestore();
+  const settingsRef = firestoreApi.doc(
+    db,
+    firestorePath.settingsCollection,
+    firestorePath.settingsDocument,
+  );
+  unsubscribeSettings = firestoreApi.onSnapshot(
+    settingsRef,
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        void saveSharedSettings().catch((error) => {
+          addEvent(`Không thể khởi tạo cấu hình chung: ${getFirebaseErrorText(error)}`, "danger");
+        });
+        return;
+      }
+      applySharedSettings(snapshot.data());
+    },
+    (error) => {
+      addEvent(`Không thể đồng bộ cấu hình: ${getFirebaseErrorText(error)}`, "danger");
+    },
+  );
+}
+
+function stopSettingsFirestore() {
+  if (!unsubscribeSettings) return;
+  unsubscribeSettings();
+  unsubscribeSettings = null;
 }
 
 function clamp(value, min, max) {
@@ -1214,7 +1296,7 @@ logoutButton.addEventListener("click", async () => {
 historyDaySelect.addEventListener("change", loadHistoryForSelectedDay);
 exportCsvButton.addEventListener("click", exportHistoryCsv);
 chartRangeSelect.addEventListener("change", updateRealtimeChartRange);
-thresholdForm.addEventListener("submit", (event) => {
+thresholdForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const nextThresholds = {
@@ -1244,12 +1326,19 @@ thresholdForm.addEventListener("submit", (event) => {
   }
 
   alertThresholds = nextThresholds;
+  try {
+    await saveSharedSettings();
+  } catch (error) {
+    thresholdMessage.textContent = `Không thể đồng bộ cấu hình: ${getFirebaseErrorText(error)}`;
+    thresholdMessage.classList.add("error");
+    return;
+  }
   thresholdMessage.textContent = "Đã lưu ngưỡng cảnh báo.";
   thresholdMessage.classList.remove("error");
   if (latestReading) updateDashboard(latestReading);
 });
 
-resetThresholdsButton.addEventListener("click", () => {
+resetThresholdsButton.addEventListener("click", async () => {
   alertThresholds = { ...defaultThresholds };
   try {
     localStorage.removeItem(thresholdStorageKey);
@@ -1257,11 +1346,18 @@ resetThresholdsButton.addEventListener("click", () => {
     // The in-memory defaults still apply for the current session.
   }
   fillThresholdForm();
+  try {
+    await saveSharedSettings();
+  } catch (error) {
+    thresholdMessage.textContent = `Không thể đồng bộ cấu hình: ${getFirebaseErrorText(error)}`;
+    thresholdMessage.classList.add("error");
+    return;
+  }
   thresholdMessage.textContent = "Đã khôi phục ngưỡng mặc định.";
   thresholdMessage.classList.remove("error");
   if (latestReading) updateDashboard(latestReading);
 });
-emailNotificationForm.addEventListener("submit", (event) => {
+emailNotificationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!emailNotificationForm.checkValidity()) {
     emailNotificationForm.reportValidity();
@@ -1282,6 +1378,13 @@ emailNotificationForm.addEventListener("submit", (event) => {
   }
 
   emailNotificationSettings = nextSettings;
+  try {
+    await saveSharedSettings();
+  } catch (error) {
+    emailNotificationMessage.textContent = `Không thể đồng bộ cấu hình: ${getFirebaseErrorText(error)}`;
+    emailNotificationMessage.classList.add("error");
+    return;
+  }
   lastEmailSentAt.clear();
   try {
     localStorage.removeItem(emailLastSentStorageKey);
@@ -1315,6 +1418,7 @@ window.addEventListener("beforeunload", () => {
   stopConnectionMonitor();
   stopReadingFirestore();
   stopHistoryFirestore();
+  stopSettingsFirestore();
 });
 
 fillThresholdForm();
