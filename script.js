@@ -14,6 +14,7 @@ const firestorePath = {
   historyCollection: "greenhouse_history",
   settingsCollection: "greenhouse_settings",
   settingsDocument: "shared",
+  detectionsCollection: "yolo_detections",
 };
 
 const emailJsConfig = Object.freeze({
@@ -84,6 +85,7 @@ const captureButton = document.querySelector("#captureButton");
 const imageUpload = document.querySelector("#imageUpload");
 const imageGallery = document.querySelector("#imageGallery");
 const galleryEmptyState = document.querySelector("#galleryEmptyState");
+const firebaseDetectionGallery = document.querySelector("#firebaseDetectionGallery");
 
 const expectedReadingIntervalMs = 2000;
 const connectionCheckIntervalMs = 1000;
@@ -113,13 +115,16 @@ let firestoreApi = null;
 let unsubscribeReadings = null;
 let unsubscribeHistory = null;
 let unsubscribeSettings = null;
+let unsubscribeDetections = null;
 let latestReading = null;
 let latestReadingReceivedAt = 0;
 let connectionMonitorIntervalId = null;
 let resizeFrameId = null;
 let chartRangeSeconds = Number(chartRangeSelect.value);
 let deviceIsOffline = false;
-let cameraStream = null;
+let cameraIsActive = false;
+let computerCameraStreamUrl = "";
+let cameraRefreshIntervalId = null;
 const galleryObjectUrls = new Set();
 
 function setCameraStatus(message, state = "") {
@@ -129,35 +134,43 @@ function setCameraStatus(message, state = "") {
 }
 
 async function startCamera() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setCameraStatus("Trình duyệt không hỗ trợ camera", "error");
+  if (!computerCameraStreamUrl) {
+    setCameraStatus("Chưa có địa chỉ webcam máy tính", "error");
     return;
   }
   startCameraButton.disabled = true;
-  setCameraStatus("Đang yêu cầu quyền truy cập...");
-  try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false,
-    });
-    cameraPreview.srcObject = cameraStream;
-    await cameraPreview.play();
+  setCameraStatus("Đang kết nối webcam máy tính...");
+  cameraPreview.onload = () => {
+    cameraIsActive = true;
     cameraPreview.classList.add("is-active");
     cameraPlaceholder.hidden = true;
     captureButton.disabled = false;
     stopCameraButton.disabled = false;
-    setCameraStatus("Camera đang hoạt động", "live");
-  } catch (error) {
-    console.error(error);
+    setCameraStatus("Đang xem webcam máy tính", "live");
+  };
+  cameraPreview.onerror = () => {
+    cameraIsActive = false;
+    cameraPreview.classList.remove("is-active");
+    cameraPlaceholder.hidden = false;
     startCameraButton.disabled = false;
-    setCameraStatus(error?.name === "NotAllowedError" ? "Bạn chưa cấp quyền camera" : "Không thể mở camera", "error");
-  }
+    captureButton.disabled = true;
+    stopCameraButton.disabled = true;
+    setCameraStatus("Không kết nối được chương trình webcam trên máy tính", "error");
+  };
+  const loadComputerCameraFrame = () => {
+    const separator = computerCameraStreamUrl.includes("?") ? "&" : "?";
+    cameraPreview.src = `${computerCameraStreamUrl}${separator}t=${Date.now()}`;
+  };
+  clearInterval(cameraRefreshIntervalId);
+  loadComputerCameraFrame();
+  cameraRefreshIntervalId = setInterval(loadComputerCameraFrame, 1500);
 }
 
 function stopCamera() {
-  cameraStream?.getTracks().forEach((track) => track.stop());
-  cameraStream = null;
-  cameraPreview.srcObject = null;
+  clearInterval(cameraRefreshIntervalId);
+  cameraRefreshIntervalId = null;
+  cameraIsActive = false;
+  cameraPreview.removeAttribute("src");
   cameraPreview.classList.remove("is-active");
   cameraPlaceholder.hidden = false;
   startCameraButton.disabled = false;
@@ -190,13 +203,18 @@ function addGalleryImage(source, label, objectUrl = "") {
 }
 
 function captureCameraImage() {
-  if (!cameraStream || !cameraPreview.videoWidth) return;
-  cameraCanvas.width = cameraPreview.videoWidth;
-  cameraCanvas.height = cameraPreview.videoHeight;
-  cameraCanvas.getContext("2d").drawImage(cameraPreview, 0, 0);
-  const timestamp = new Date().toLocaleString("vi-VN");
-  addGalleryImage(cameraCanvas.toDataURL("image/jpeg", 0.9), `Ảnh camera chụp lúc ${timestamp}`);
-  setCameraStatus(`Đã chụp ảnh lúc ${new Date().toLocaleTimeString("vi-VN")}`, "live");
+  if (!cameraIsActive || !cameraPreview.naturalWidth) return;
+  try {
+    cameraCanvas.width = cameraPreview.naturalWidth;
+    cameraCanvas.height = cameraPreview.naturalHeight;
+    cameraCanvas.getContext("2d").drawImage(cameraPreview, 0, 0);
+    const timestamp = new Date().toLocaleString("vi-VN");
+    addGalleryImage(cameraCanvas.toDataURL("image/jpeg", 0.9), `Webcam máy tính lúc ${timestamp}`);
+    setCameraStatus(`Đã lưu khung hình lúc ${new Date().toLocaleTimeString("vi-VN")}`, "live");
+  } catch (error) {
+    console.error(error);
+    setCameraStatus("Trình duyệt chặn lưu ảnh từ stream khác địa chỉ", "error");
+  }
 }
 
 function addUploadedImages(event) {
@@ -232,10 +250,11 @@ function showAuthView(message = "") {
   authView.hidden = false;
   dashboardView.hidden = true;
   authMessage.textContent = message;
-  if (cameraStream) stopCamera();
+  if (cameraIsActive) stopCamera();
   stopReadingFirestore();
   stopHistoryFirestore();
   stopSettingsFirestore();
+  stopDetectionFirestore();
   stopConnectionMonitor();
 }
 
@@ -307,6 +326,7 @@ async function setupFirebase() {
       }
       listenToReadings();
       listenToSettings();
+      listenToDetections();
       configureHistoryPicker();
       loadHistoryForSelectedDay();
     });
@@ -605,6 +625,7 @@ function getSharedSettingsData() {
     ...alertThresholds,
     email: emailNotificationSettings.email,
     emailEnabled: emailNotificationSettings.enabled,
+    cameraStreamUrl: computerCameraStreamUrl,
   };
 }
 
@@ -644,6 +665,17 @@ function applySharedSettings(data) {
   };
   fillEmailNotificationForm();
   localStorage.setItem(emailNotificationStorageKey, JSON.stringify(emailNotificationSettings));
+  if (typeof data.cameraStreamUrl === "string" && data.cameraStreamUrl.trim()) {
+    const nextStreamUrl = data.cameraStreamUrl.trim();
+    const streamChanged = nextStreamUrl !== computerCameraStreamUrl;
+    computerCameraStreamUrl = nextStreamUrl;
+    if (data.cameraOnline === true && (!cameraIsActive || streamChanged)) {
+      void startCamera();
+    } else if (data.cameraOnline === false) {
+      if (cameraIsActive) stopCamera();
+      setCameraStatus("Chương trình webcam trên máy tính đang tắt");
+    }
+  }
   if (latestReading) updateDashboard(latestReading);
 }
 
@@ -675,6 +707,87 @@ function stopSettingsFirestore() {
   if (!unsubscribeSettings) return;
   unsubscribeSettings();
   unsubscribeSettings = null;
+}
+
+function normalizeDetection(data) {
+  const storedUrl = typeof data.imageUrl === "string" ? data.imageUrl : "";
+  const imageBase64 = typeof data.imageBase64 === "string" ? data.imageBase64 : "";
+  const mimeType = typeof data.imageMimeType === "string" ? data.imageMimeType : "image/jpeg";
+  const imageUrl = storedUrl || (imageBase64 ? `data:${mimeType};base64,${imageBase64}` : "");
+  if (!imageUrl) return null;
+  const confidence = Number(data.confidence);
+  return {
+    imageUrl,
+    label: typeof data.label === "string" ? data.label : "Phát hiện sâu bệnh",
+    confidence: Number.isFinite(confidence) ? confidence : null,
+    detectedAt: data.detectedAt?.toDate ? data.detectedAt.toDate() : null,
+    camera: typeof data.camera === "string" ? data.camera : "Webcam",
+    detectionCount: Number(data.detectionCount) || 1,
+  };
+}
+
+function renderDetections(detections) {
+  firebaseDetectionGallery.replaceChildren();
+  if (!detections.length) {
+    const empty = document.createElement("p");
+    empty.className = "gallery-empty";
+    empty.textContent = "Chưa có ảnh sâu bệnh nào được gửi từ webcam.";
+    firebaseDetectionGallery.append(empty);
+    return;
+  }
+
+  detections.forEach((detection) => {
+    const link = document.createElement("a");
+    const image = document.createElement("img");
+    const caption = document.createElement("span");
+    const title = document.createElement("strong");
+    const meta = document.createElement("small");
+    const score = document.createElement("b");
+    link.className = "firebase-detection-item";
+    link.href = detection.imageUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    image.src = detection.imageUrl;
+    image.loading = "lazy";
+    image.alt = `${detection.label} từ ${detection.camera}`;
+    title.textContent = detection.label;
+    score.textContent = detection.confidence === null
+      ? `${detection.detectionCount} vùng bệnh`
+      : `${Math.round(detection.confidence * 100)}%`;
+    meta.textContent = detection.detectedAt
+      ? `${detection.detectedAt.toLocaleString("vi-VN")} • ${detection.camera}`
+      : detection.camera;
+    caption.append(title, score, meta);
+    link.append(image, caption);
+    firebaseDetectionGallery.append(link);
+  });
+}
+
+function listenToDetections() {
+  stopDetectionFirestore();
+  const detectionsRef = firestoreApi.collection(db, firestorePath.detectionsCollection);
+  const detectionsQuery = firestoreApi.query(
+    detectionsRef,
+    firestoreApi.orderBy("detectedAt", "desc"),
+    firestoreApi.limit(30),
+  );
+  unsubscribeDetections = firestoreApi.onSnapshot(
+    detectionsQuery,
+    (snapshot) => renderDetections(
+      snapshot.docs.map((document) => normalizeDetection(document.data())).filter(Boolean),
+    ),
+    (error) => {
+      console.error(error);
+      renderDetections([]);
+      addEvent(`Không đọc được ảnh nhận diện: ${getFirebaseErrorText(error)}`, "danger");
+    },
+  );
+}
+
+function stopDetectionFirestore() {
+  if (!unsubscribeDetections) return;
+  unsubscribeDetections();
+  unsubscribeDetections = null;
 }
 
 function clamp(value, min, max) {
@@ -1419,6 +1532,7 @@ window.addEventListener("beforeunload", () => {
   stopReadingFirestore();
   stopHistoryFirestore();
   stopSettingsFirestore();
+  stopDetectionFirestore();
 });
 
 fillThresholdForm();
