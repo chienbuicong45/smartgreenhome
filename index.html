@@ -4,14 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Theo dõi nhiệt độ và độ ẩm nhà kính theo thời gian thực." />
-    <meta name="theme-color" content="#2f8a5f" />
+    <meta name="theme-color" content="#0f766e" />
     <title>Greenhouse Monitor</title>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <main id="authView" class="auth-view">
       <section class="auth-card">
+        <div class="brand-mark" aria-hidden="true"><span>G</span></div>
         <p class="eyebrow">Đăng nhập</p>
         <h1>Greenhouse Monitor</h1>
         <p class="auth-copy">
@@ -55,12 +56,17 @@
 
     <main id="dashboardView" class="dashboard" hidden>
       <header class="hero">
-        <div>
+        <div class="hero-copy">
           <p class="eyebrow">Greenhouse Control</p>
           <h1>Hệ thống giám sát nhà kính</h1>
           <p class="subtitle">
             Theo dõi nhiệt độ, độ ẩm và trạng thái môi trường theo thời gian thực.
           </p>
+        </div>
+        <div class="hero-orbit" aria-hidden="true">
+          <span class="orbit-leaf">⌁</span>
+          <span class="orbit-chip orbit-chip-temp">24.8°C</span>
+          <span class="orbit-chip orbit-chip-humid">72%</span>
         </div>
         <div class="hero-actions">
           <div class="status-pill is-connecting">
