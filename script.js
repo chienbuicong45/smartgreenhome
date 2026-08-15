@@ -82,6 +82,8 @@ const cameraStatus = document.querySelector("#cameraStatus");
 const startCameraButton = document.querySelector("#startCameraButton");
 const stopCameraButton = document.querySelector("#stopCameraButton");
 const captureButton = document.querySelector("#captureButton");
+const manualScanButton = document.querySelector("#manualScanButton");
+const manualScanStatus = document.querySelector("#manualScanStatus");
 const imageUpload = document.querySelector("#imageUpload");
 const imageGallery = document.querySelector("#imageGallery");
 const galleryEmptyState = document.querySelector("#galleryEmptyState");
@@ -124,7 +126,7 @@ let chartRangeSeconds = Number(chartRangeSelect.value);
 let deviceIsOffline = false;
 let cameraIsActive = false;
 let computerCameraStreamUrl = "";
-let cameraRefreshIntervalId = null;
+let cameraRefreshTimeoutId = null;
 const galleryObjectUrls = new Set();
 
 function setCameraStatus(message, state = "") {
@@ -147,6 +149,8 @@ async function startCamera() {
     captureButton.disabled = false;
     stopCameraButton.disabled = false;
     setCameraStatus("Đang xem webcam máy tính", "live");
+    clearTimeout(cameraRefreshTimeoutId);
+    cameraRefreshTimeoutId = setTimeout(loadComputerCameraFrame, 250);
   };
   cameraPreview.onerror = () => {
     cameraIsActive = false;
@@ -156,19 +160,20 @@ async function startCamera() {
     captureButton.disabled = true;
     stopCameraButton.disabled = true;
     setCameraStatus("Không kết nối được chương trình webcam trên máy tính", "error");
+    clearTimeout(cameraRefreshTimeoutId);
+    cameraRefreshTimeoutId = setTimeout(loadComputerCameraFrame, 1200);
   };
-  const loadComputerCameraFrame = () => {
+  function loadComputerCameraFrame() {
     const separator = computerCameraStreamUrl.includes("?") ? "&" : "?";
     cameraPreview.src = `${computerCameraStreamUrl}${separator}t=${Date.now()}`;
-  };
-  clearInterval(cameraRefreshIntervalId);
+  }
+  clearTimeout(cameraRefreshTimeoutId);
   loadComputerCameraFrame();
-  cameraRefreshIntervalId = setInterval(loadComputerCameraFrame, 1500);
 }
 
 function stopCamera() {
-  clearInterval(cameraRefreshIntervalId);
-  cameraRefreshIntervalId = null;
+  clearTimeout(cameraRefreshTimeoutId);
+  cameraRefreshTimeoutId = null;
   cameraIsActive = false;
   cameraPreview.removeAttribute("src");
   cameraPreview.classList.remove("is-active");
@@ -676,7 +681,69 @@ function applySharedSettings(data) {
       setCameraStatus("Chương trình webcam trên máy tính đang tắt");
     }
   }
+  updateManualScanState(data);
   if (latestReading) updateDashboard(latestReading);
+}
+
+function updateManualScanState(data) {
+  const status = typeof data.manualCaptureStatus === "string"
+    ? data.manualCaptureStatus
+    : "";
+  const message = typeof data.manualCaptureMessage === "string"
+    ? data.manualCaptureMessage
+    : "";
+  const busy = status === "pending" || status === "processing";
+  manualScanButton.disabled = busy || data.cameraOnline !== true;
+  manualScanButton.textContent = status === "pending"
+    ? "Đang gửi lệnh…"
+    : status === "processing"
+      ? "AI đang quét…"
+      : "Chụp & quét ngay";
+  manualScanStatus.classList.toggle("is-error", status === "failed");
+  if (message) {
+    manualScanStatus.textContent = message;
+  } else if (data.cameraOnline !== true) {
+    manualScanStatus.textContent = "Webcam máy tính đang ngoại tuyến.";
+  } else {
+    manualScanStatus.textContent = "Sẵn sàng chụp và quét sâu bệnh.";
+  }
+}
+
+async function requestManualCapture() {
+  if (!db || !firestoreApi || !auth?.currentUser) {
+    manualScanStatus.textContent = "Firebase chưa sẵn sàng, vui lòng đăng nhập lại.";
+    manualScanStatus.classList.add("is-error");
+    return;
+  }
+  manualScanButton.disabled = true;
+  manualScanButton.textContent = "Đang gửi lệnh…";
+  manualScanStatus.textContent = "Đang gửi yêu cầu đến webcam máy tính…";
+  manualScanStatus.classList.remove("is-error");
+  const requestId = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  try {
+    const settingsRef = firestoreApi.doc(
+      db,
+      firestorePath.settingsCollection,
+      firestorePath.settingsDocument,
+    );
+    await firestoreApi.setDoc(
+      settingsRef,
+      {
+        manualCaptureRequestId: requestId,
+        manualCaptureStatus: "pending",
+        manualCaptureRequestedAt: firestoreApi.serverTimestamp(),
+        manualCaptureRequestedBy: auth.currentUser.email || auth.currentUser.uid,
+        manualCaptureMessage: "Đã gửi yêu cầu, đang chờ máy tính nhận lệnh.",
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    manualScanButton.disabled = false;
+    manualScanButton.textContent = "Chụp & quét ngay";
+    manualScanStatus.textContent = `Không gửi được lệnh: ${getFirebaseErrorText(error)}`;
+    manualScanStatus.classList.add("is-error");
+  }
 }
 
 function listenToSettings() {
@@ -1516,6 +1583,7 @@ historyChart.addEventListener("pointerleave", () => hideReadingTooltip(historyTo
 startCameraButton.addEventListener("click", startCamera);
 stopCameraButton.addEventListener("click", stopCamera);
 captureButton.addEventListener("click", captureCameraImage);
+manualScanButton.addEventListener("click", requestManualCapture);
 imageUpload.addEventListener("change", addUploadedImages);
 
 window.addEventListener("resize", () => {

@@ -132,9 +132,13 @@
             </div>
             <div class="camera-actions">
               <button id="startCameraButton" type="button">Xem webcam máy tính</button>
+              <button id="manualScanButton" class="manual-scan-button" type="button" disabled>Chụp &amp; quét ngay</button>
               <button id="captureButton" class="secondary-button" type="button" disabled>Lưu khung hình</button>
               <button id="stopCameraButton" class="secondary-button" type="button" disabled>Dừng xem</button>
             </div>
+            <p id="manualScanStatus" class="manual-scan-status" role="status" aria-live="polite">
+              Bấm để webcam máy tính chụp và quét sâu bệnh ngay.
+            </p>
           </div>
           <div class="gallery-panel">
             <div class="gallery-toolbar">
@@ -318,6 +322,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=28"></script>
+    <script src="./script.js?v=30"></script>
   </body>
 </html>

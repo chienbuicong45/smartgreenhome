@@ -739,6 +739,12 @@ h2 {
 .camera-placeholder span { color: #76b88a; font-size: 2rem; }
 .camera-placeholder small { color: #a9bbb0; }
 .camera-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.manual-scan-button {
+  background: linear-gradient(135deg, #f59e0b, #f97316) !important;
+  box-shadow: 0 8px 18px rgba(234, 88, 12, .2) !important;
+}
+.manual-scan-status { margin: 10px 2px 0; color: var(--muted); font-size: .88rem; }
+.manual-scan-status.is-error { color: var(--red); }
 .gallery-panel { min-width: 0; }
 .gallery-toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .gallery-toolbar h3, .gallery-toolbar p { margin: 0; }
