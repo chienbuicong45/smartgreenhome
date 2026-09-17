@@ -50,7 +50,6 @@ const realtimeChartTitle = document.querySelector("#realtimeChartTitle");
 const realtimeChartStatus = document.querySelector("#realtimeChartStatus");
 const chartRangeSelect = document.querySelector("#chartRangeSelect");
 const realtimeDataTableBody = document.querySelector("#realtimeDataTableBody");
-const historyDaySelect = document.querySelector("#historyDaySelect");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const historyStatus = document.querySelector("#historyStatus");
 const historyChart = document.querySelector("#historyChart");
@@ -81,14 +80,12 @@ const cameraStatus = document.querySelector("#cameraStatus");
 const startCameraButton = document.querySelector("#startCameraButton");
 const stopCameraButton = document.querySelector("#stopCameraButton");
 const captureButton = document.querySelector("#captureButton");
-const imageUpload = document.querySelector("#imageUpload");
 const imageGallery = document.querySelector("#imageGallery");
 const galleryEmptyState = document.querySelector("#galleryEmptyState");
 
 const expectedReadingIntervalMs = 2000;
 const connectionCheckIntervalMs = 1000;
 const deviceStaleAfterMs = 15000;
-const historyDays = 7;
 const thresholdStorageKey = "greenhouse-alert-thresholds";
 const emailNotificationStorageKey = "greenhouse-email-notifications";
 const loginHistoryStorageKey = "greenhouse-login-history";
@@ -122,7 +119,6 @@ let deviceIsOffline = false;
 let cameraIsActive = false;
 let computerCameraStreamUrl = "";
 let cameraRefreshTimeoutId = null;
-const galleryObjectUrls = new Set();
 
 function setCameraStatus(message, state = "") {
   cameraStatus.textContent = message;
@@ -179,7 +175,7 @@ function stopCamera() {
   setCameraStatus("Camera đã tắt");
 }
 
-function addGalleryImage(source, label, objectUrl = "") {
+function addGalleryImage(source, label) {
   galleryEmptyState.hidden = true;
   const figure = document.createElement("figure");
   const image = document.createElement("img");
@@ -191,10 +187,6 @@ function addGalleryImage(source, label, objectUrl = "") {
   removeButton.textContent = "×";
   removeButton.setAttribute("aria-label", `Xóa ${label}`);
   removeButton.addEventListener("click", () => {
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-      galleryObjectUrls.delete(objectUrl);
-    }
     figure.remove();
     galleryEmptyState.hidden = imageGallery.querySelectorAll(".gallery-item").length > 0;
   });
@@ -215,16 +207,6 @@ function captureCameraImage() {
     console.error(error);
     setCameraStatus("Trình duyệt chặn lưu ảnh từ stream khác địa chỉ", "error");
   }
-}
-
-function addUploadedImages(event) {
-  [...event.target.files].forEach((file) => {
-    if (!file.type.startsWith("image/")) return;
-    const objectUrl = URL.createObjectURL(file);
-    galleryObjectUrls.add(objectUrl);
-    addGalleryImage(objectUrl, file.name, objectUrl);
-  });
-  imageUpload.value = "";
 }
 
 function getFirebaseErrorText(error) {
@@ -325,8 +307,7 @@ async function setupFirebase() {
       }
       listenToReadings();
       listenToSettings();
-      configureHistoryPicker();
-      loadHistoryForSelectedDay();
+      loadAllHistory();
     });
   } catch (error) {
     console.error(error);
@@ -402,40 +383,18 @@ function normalizeReading(data) {
   };
 }
 
-function formatDateValue(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function configureHistoryPicker() {
-  const today = new Date();
-  const earliestDay = new Date(today);
-  earliestDay.setDate(today.getDate() - (historyDays - 1));
-
-  historyDaySelect.min = formatDateValue(earliestDay);
-  historyDaySelect.max = formatDateValue(today);
-  historyDaySelect.value = formatDateValue(today);
-}
-
-function loadHistoryForSelectedDay() {
-  if (!db || !firestoreApi || !historyDaySelect.value) return;
+function loadAllHistory() {
+  if (!db || !firestoreApi) return;
 
   stopHistoryFirestore();
   historyReadings = [];
   updateHistoryStatistics();
   updateExportButtonState();
-  const start = new Date(`${historyDaySelect.value}T00:00:00`);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 1);
   historyStatus.textContent = "Đang kết nối dữ liệu lịch sử...";
 
   const historyRef = firestoreApi.collection(db, firestorePath.historyCollection);
   const historyQuery = firestoreApi.query(
     historyRef,
-    firestoreApi.where("recordedAt", ">=", firestoreApi.Timestamp.fromDate(start)),
-    firestoreApi.where("recordedAt", "<", firestoreApi.Timestamp.fromDate(end)),
     firestoreApi.orderBy("recordedAt", "asc"),
   );
 
@@ -447,8 +406,8 @@ function loadHistoryForSelectedDay() {
         .filter(Boolean);
 
       historyStatus.textContent = historyReadings.length
-        ? `${historyReadings.length} mẫu trong ngày ${start.toLocaleDateString("vi-VN")} - đang cập nhật`
-        : `Chưa có dữ liệu ngày ${start.toLocaleDateString("vi-VN")} - đang theo dõi`;
+        ? `${historyReadings.length} mẫu trong toàn bộ lịch sử - đang cập nhật`
+        : "Chưa có dữ liệu lịch sử - đang theo dõi";
       updateHistoryStatistics();
       updateExportButtonState();
       resizeHistoryCanvas();
@@ -539,10 +498,9 @@ function exportHistoryCsv() {
 
   const temperatureStats = calculateFieldStatistics("temperature");
   const humidityStats = calculateFieldStatistics("humidity");
-  const selectedDate = new Date(`${historyDaySelect.value}T00:00:00`).toLocaleDateString("vi-VN");
   const rows = [
     ["BÁO CÁO DỮ LIỆU NHÀ KÍNH"],
-    [`Ngày báo cáo: ${selectedDate}`],
+    ["Phạm vi báo cáo: Toàn bộ thời gian"],
     ["Số mẫu", historyReadings.length],
     [],
     ["Chỉ số", "Nhỏ nhất", "Lớn nhất", "Trung bình"],
@@ -564,7 +522,7 @@ function exportHistoryCsv() {
   const url = URL.createObjectURL(blob);
   const downloadLink = document.createElement("a");
   downloadLink.href = url;
-  downloadLink.download = `bao-cao-nha-kinh-${historyDaySelect.value}.csv`;
+  downloadLink.download = `bao-cao-nha-kinh-toan-thoi-gian-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.append(downloadLink);
   downloadLink.click();
   downloadLink.remove();
@@ -1323,7 +1281,6 @@ logoutButton.addEventListener("click", async () => {
   }
 });
 
-historyDaySelect.addEventListener("change", loadHistoryForSelectedDay);
 exportCsvButton.addEventListener("click", exportHistoryCsv);
 chartRangeSelect.addEventListener("change", updateRealtimeChartRange);
 thresholdForm.addEventListener("submit", async (event) => {
@@ -1433,7 +1390,6 @@ historyChart.addEventListener("pointerleave", () => hideReadingTooltip(historyTo
 startCameraButton.addEventListener("click", startCamera);
 stopCameraButton.addEventListener("click", stopCamera);
 captureButton.addEventListener("click", captureCameraImage);
-imageUpload.addEventListener("change", addUploadedImages);
 
 window.addEventListener("resize", () => {
   cancelAnimationFrame(resizeFrameId);
@@ -1444,7 +1400,6 @@ window.addEventListener("resize", () => {
 });
 window.addEventListener("beforeunload", () => {
   stopCamera();
-  galleryObjectUrls.forEach((url) => URL.revokeObjectURL(url));
   stopConnectionMonitor();
   stopReadingFirestore();
   stopHistoryFirestore();
