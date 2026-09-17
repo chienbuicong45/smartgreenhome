@@ -14,7 +14,6 @@ const firestorePath = {
   historyCollection: "greenhouse_history",
   settingsCollection: "greenhouse_settings",
   settingsDocument: "shared",
-  detectionsCollection: "yolo_detections",
 };
 
 const emailJsConfig = Object.freeze({
@@ -82,12 +81,9 @@ const cameraStatus = document.querySelector("#cameraStatus");
 const startCameraButton = document.querySelector("#startCameraButton");
 const stopCameraButton = document.querySelector("#stopCameraButton");
 const captureButton = document.querySelector("#captureButton");
-const manualScanButton = document.querySelector("#manualScanButton");
-const manualScanStatus = document.querySelector("#manualScanStatus");
 const imageUpload = document.querySelector("#imageUpload");
 const imageGallery = document.querySelector("#imageGallery");
 const galleryEmptyState = document.querySelector("#galleryEmptyState");
-const firebaseDetectionGallery = document.querySelector("#firebaseDetectionGallery");
 
 const expectedReadingIntervalMs = 2000;
 const connectionCheckIntervalMs = 1000;
@@ -117,7 +113,6 @@ let firestoreApi = null;
 let unsubscribeReadings = null;
 let unsubscribeHistory = null;
 let unsubscribeSettings = null;
-let unsubscribeDetections = null;
 let latestReading = null;
 let latestReadingReceivedAt = 0;
 let connectionMonitorIntervalId = null;
@@ -259,7 +254,6 @@ function showAuthView(message = "") {
   stopReadingFirestore();
   stopHistoryFirestore();
   stopSettingsFirestore();
-  stopDetectionFirestore();
   stopConnectionMonitor();
 }
 
@@ -331,7 +325,6 @@ async function setupFirebase() {
       }
       listenToReadings();
       listenToSettings();
-      listenToDetections();
       configureHistoryPicker();
       loadHistoryForSelectedDay();
     });
@@ -681,69 +674,7 @@ function applySharedSettings(data) {
       setCameraStatus("Chương trình webcam trên máy tính đang tắt");
     }
   }
-  updateManualScanState(data);
   if (latestReading) updateDashboard(latestReading);
-}
-
-function updateManualScanState(data) {
-  const status = typeof data.manualCaptureStatus === "string"
-    ? data.manualCaptureStatus
-    : "";
-  const message = typeof data.manualCaptureMessage === "string"
-    ? data.manualCaptureMessage
-    : "";
-  const busy = status === "pending" || status === "processing";
-  manualScanButton.disabled = busy || data.cameraOnline !== true;
-  manualScanButton.textContent = status === "pending"
-    ? "Đang gửi lệnh…"
-    : status === "processing"
-      ? "AI đang quét…"
-      : "Chụp & quét ngay";
-  manualScanStatus.classList.toggle("is-error", status === "failed");
-  if (message) {
-    manualScanStatus.textContent = message;
-  } else if (data.cameraOnline !== true) {
-    manualScanStatus.textContent = "Webcam máy tính đang ngoại tuyến.";
-  } else {
-    manualScanStatus.textContent = "Sẵn sàng chụp và quét sâu bệnh.";
-  }
-}
-
-async function requestManualCapture() {
-  if (!db || !firestoreApi || !auth?.currentUser) {
-    manualScanStatus.textContent = "Firebase chưa sẵn sàng, vui lòng đăng nhập lại.";
-    manualScanStatus.classList.add("is-error");
-    return;
-  }
-  manualScanButton.disabled = true;
-  manualScanButton.textContent = "Đang gửi lệnh…";
-  manualScanStatus.textContent = "Đang gửi yêu cầu đến webcam máy tính…";
-  manualScanStatus.classList.remove("is-error");
-  const requestId = globalThis.crypto?.randomUUID?.()
-    ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  try {
-    const settingsRef = firestoreApi.doc(
-      db,
-      firestorePath.settingsCollection,
-      firestorePath.settingsDocument,
-    );
-    await firestoreApi.setDoc(
-      settingsRef,
-      {
-        manualCaptureRequestId: requestId,
-        manualCaptureStatus: "pending",
-        manualCaptureRequestedAt: firestoreApi.serverTimestamp(),
-        manualCaptureRequestedBy: auth.currentUser.email || auth.currentUser.uid,
-        manualCaptureMessage: "Đã gửi yêu cầu, đang chờ máy tính nhận lệnh.",
-      },
-      { merge: true },
-    );
-  } catch (error) {
-    manualScanButton.disabled = false;
-    manualScanButton.textContent = "Chụp & quét ngay";
-    manualScanStatus.textContent = `Không gửi được lệnh: ${getFirebaseErrorText(error)}`;
-    manualScanStatus.classList.add("is-error");
-  }
 }
 
 function listenToSettings() {
@@ -774,87 +705,6 @@ function stopSettingsFirestore() {
   if (!unsubscribeSettings) return;
   unsubscribeSettings();
   unsubscribeSettings = null;
-}
-
-function normalizeDetection(data) {
-  const storedUrl = typeof data.imageUrl === "string" ? data.imageUrl : "";
-  const imageBase64 = typeof data.imageBase64 === "string" ? data.imageBase64 : "";
-  const mimeType = typeof data.imageMimeType === "string" ? data.imageMimeType : "image/jpeg";
-  const imageUrl = storedUrl || (imageBase64 ? `data:${mimeType};base64,${imageBase64}` : "");
-  if (!imageUrl) return null;
-  const confidence = Number(data.confidence);
-  return {
-    imageUrl,
-    label: typeof data.label === "string" ? data.label : "Phát hiện sâu bệnh",
-    confidence: Number.isFinite(confidence) ? confidence : null,
-    detectedAt: data.detectedAt?.toDate ? data.detectedAt.toDate() : null,
-    camera: typeof data.camera === "string" ? data.camera : "Webcam",
-    detectionCount: Number(data.detectionCount) || 1,
-  };
-}
-
-function renderDetections(detections) {
-  firebaseDetectionGallery.replaceChildren();
-  if (!detections.length) {
-    const empty = document.createElement("p");
-    empty.className = "gallery-empty";
-    empty.textContent = "Chưa có ảnh sâu bệnh nào được gửi từ webcam.";
-    firebaseDetectionGallery.append(empty);
-    return;
-  }
-
-  detections.forEach((detection) => {
-    const link = document.createElement("a");
-    const image = document.createElement("img");
-    const caption = document.createElement("span");
-    const title = document.createElement("strong");
-    const meta = document.createElement("small");
-    const score = document.createElement("b");
-    link.className = "firebase-detection-item";
-    link.href = detection.imageUrl;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    image.src = detection.imageUrl;
-    image.loading = "lazy";
-    image.alt = `${detection.label} từ ${detection.camera}`;
-    title.textContent = detection.label;
-    score.textContent = detection.confidence === null
-      ? `${detection.detectionCount} vùng bệnh`
-      : `${Math.round(detection.confidence * 100)}%`;
-    meta.textContent = detection.detectedAt
-      ? `${detection.detectedAt.toLocaleString("vi-VN")} • ${detection.camera}`
-      : detection.camera;
-    caption.append(title, score, meta);
-    link.append(image, caption);
-    firebaseDetectionGallery.append(link);
-  });
-}
-
-function listenToDetections() {
-  stopDetectionFirestore();
-  const detectionsRef = firestoreApi.collection(db, firestorePath.detectionsCollection);
-  const detectionsQuery = firestoreApi.query(
-    detectionsRef,
-    firestoreApi.orderBy("detectedAt", "desc"),
-    firestoreApi.limit(30),
-  );
-  unsubscribeDetections = firestoreApi.onSnapshot(
-    detectionsQuery,
-    (snapshot) => renderDetections(
-      snapshot.docs.map((document) => normalizeDetection(document.data())).filter(Boolean),
-    ),
-    (error) => {
-      console.error(error);
-      renderDetections([]);
-      addEvent(`Không đọc được ảnh nhận diện: ${getFirebaseErrorText(error)}`, "danger");
-    },
-  );
-}
-
-function stopDetectionFirestore() {
-  if (!unsubscribeDetections) return;
-  unsubscribeDetections();
-  unsubscribeDetections = null;
 }
 
 function clamp(value, min, max) {
@@ -1583,7 +1433,6 @@ historyChart.addEventListener("pointerleave", () => hideReadingTooltip(historyTo
 startCameraButton.addEventListener("click", startCamera);
 stopCameraButton.addEventListener("click", stopCamera);
 captureButton.addEventListener("click", captureCameraImage);
-manualScanButton.addEventListener("click", requestManualCapture);
 imageUpload.addEventListener("change", addUploadedImages);
 
 window.addEventListener("resize", () => {
@@ -1600,7 +1449,6 @@ window.addEventListener("beforeunload", () => {
   stopReadingFirestore();
   stopHistoryFirestore();
   stopSettingsFirestore();
-  stopDetectionFirestore();
 });
 
 fillThresholdForm();

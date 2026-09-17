@@ -127,18 +127,14 @@
               <div id="cameraPlaceholder" class="camera-placeholder">
                 <span aria-hidden="true">◉</span>
                 <strong>Chưa kết nối webcam máy tính</strong>
-                <small>Hãy chạy chương trình nhận diện trên máy tính</small>
+                <small>Hãy chạy chương trình camera trên máy tính</small>
               </div>
             </div>
             <div class="camera-actions">
               <button id="startCameraButton" type="button">Xem webcam máy tính</button>
-              <button id="manualScanButton" class="manual-scan-button" type="button" disabled>Chụp &amp; quét ngay</button>
               <button id="captureButton" class="secondary-button" type="button" disabled>Lưu khung hình</button>
               <button id="stopCameraButton" class="secondary-button" type="button" disabled>Dừng xem</button>
             </div>
-            <p id="manualScanStatus" class="manual-scan-status" role="status" aria-live="polite">
-              Bấm để webcam máy tính chụp và quét sâu bệnh ngay.
-            </p>
           </div>
           <div class="gallery-panel">
             <div class="gallery-toolbar">
@@ -150,19 +146,6 @@
             <div id="imageGallery" class="image-gallery">
               <p id="galleryEmptyState" class="gallery-empty">Chưa có hình ảnh nào.</p>
             </div>
-          </div>
-        </div>
-        <div class="firebase-gallery-panel">
-          <div class="gallery-toolbar firebase-gallery-head">
-            <div>
-              <p class="eyebrow">YOLO • Firebase</p>
-              <h3>Ảnh sâu bệnh từ webcam</h3>
-              <p>Tự động cập nhật khi chương trình nhận diện gửi ảnh mới.</p>
-            </div>
-            <span class="live-sync-badge"><i></i>Đồng bộ trực tiếp</span>
-          </div>
-          <div id="firebaseDetectionGallery" class="firebase-detection-gallery" aria-live="polite">
-            <p class="gallery-empty">Đang chờ ảnh nhận diện từ Firebase...</p>
           </div>
         </div>
         <canvas id="cameraCanvas" hidden></canvas>
