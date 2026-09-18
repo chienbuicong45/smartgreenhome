@@ -33,13 +33,10 @@ const authMessage = document.querySelector("#authMessage");
 const logoutButton = document.querySelector("#logoutButton");
 const temperatureValue = document.querySelector("#temperatureValue");
 const humidityValue = document.querySelector("#humidityValue");
-const healthValue = document.querySelector("#healthValue");
 const temperatureBar = document.querySelector("#temperatureBar");
 const humidityBar = document.querySelector("#humidityBar");
-const healthBar = document.querySelector("#healthBar");
 const temperatureStatus = document.querySelector("#temperatureStatus");
 const humidityStatus = document.querySelector("#humidityStatus");
-const healthStatus = document.querySelector("#healthStatus");
 const connectionText = document.querySelector("#connectionText");
 const connectionStatus = connectionText.closest(".status-pill");
 const eventLog = document.querySelector("#eventLog");
@@ -507,12 +504,11 @@ function exportHistoryCsv() {
     ["Nhiệt độ (°C)", temperatureStats.min.toFixed(1), temperatureStats.max.toFixed(1), temperatureStats.average.toFixed(1)],
     ["Độ ẩm (%)", humidityStats.min.toFixed(1), humidityStats.max.toFixed(1), humidityStats.average.toFixed(1)],
     [],
-    ["Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)", "Trạng thái (%)"],
+    ["Thời gian", "Nhiệt độ (°C)", "Độ ẩm (%)"],
     ...historyReadings.map((reading) => [
       formatSpreadsheetText(reading.time.toLocaleString("vi-VN")),
       reading.temperature.toFixed(1),
       reading.humidity,
-      calculateHealth(reading.temperature, reading.humidity),
     ]),
   ];
   const spreadsheetContent = rows
@@ -785,12 +781,6 @@ function getHumidityStatus(value) {
   return ["Độ ẩm phù hợp", "normal"];
 }
 
-function calculateHealth(temperature, humidity) {
-  const tempScore = 100 - Math.abs(temperature - 28) * 8;
-  const humidityScore = 100 - Math.abs(humidity - 68) * 2;
-  return Math.round(clamp((tempScore + humidityScore) / 2, 0, 100));
-}
-
 function getConfiguredTemperatureStatus(value) {
   if (value < alertThresholds.temperatureMin) return ["Nhiệt độ thấp hơn ngưỡng cảnh báo", "warning"];
   if (value > alertThresholds.temperatureMax) return ["Nhiệt độ cao hơn ngưỡng cảnh báo", "danger"];
@@ -806,17 +796,13 @@ function getConfiguredHumidityStatus(value) {
 function updateDashboard(reading) {
   const [tempMessage, tempLevel] = getConfiguredTemperatureStatus(reading.temperature);
   const [humidityMessage, humidityLevel] = getConfiguredHumidityStatus(reading.humidity);
-  const health = calculateHealth(reading.temperature, reading.humidity);
 
   temperatureValue.textContent = `${reading.temperature}°C`;
   humidityValue.textContent = `${reading.humidity}%`;
-  healthValue.textContent = `${health}%`;
   temperatureBar.style.width = `${clamp((reading.temperature / 40) * 100, 0, 100)}%`;
   humidityBar.style.width = `${clamp(reading.humidity, 0, 100)}%`;
-  healthBar.style.width = `${health}%`;
   temperatureStatus.textContent = tempMessage;
   humidityStatus.textContent = humidityMessage;
-  healthStatus.textContent = health >= 75 ? "Môi trường ổn định" : "Cần theo dõi điều kiện";
   setConnectionState("online", `Cập nhật ${reading.time.toLocaleTimeString("vi-VN")}`);
 
   if (tempLevel !== "normal") addEvent(tempMessage, tempLevel);

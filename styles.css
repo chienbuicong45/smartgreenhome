@@ -1065,7 +1065,6 @@ summary:focus-visible,
 
 .metric.temperature::after { background: var(--amber-soft); }
 .metric.humidity::after { background: var(--blue-soft); }
-.metric.health::after { background: var(--green-soft); }
 
 .metric:hover,
 .media-card:hover,
@@ -1087,7 +1086,6 @@ summary:focus-visible,
 
 .temperature .metric-head strong { color: var(--coral); }
 .humidity .metric-head strong { color: var(--blue); }
-.health .metric-head strong { color: var(--green); }
 
 .range {
   height: 9px;
