@@ -47,6 +47,10 @@ const realtimeChartTitle = document.querySelector("#realtimeChartTitle");
 const realtimeChartStatus = document.querySelector("#realtimeChartStatus");
 const chartRangeSelect = document.querySelector("#chartRangeSelect");
 const realtimeDataTableBody = document.querySelector("#realtimeDataTableBody");
+const historyFromDate = document.querySelector("#historyFromDate");
+const historyToDate = document.querySelector("#historyToDate");
+const applyHistoryRangeButton = document.querySelector("#applyHistoryRangeButton");
+const showAllHistoryButton = document.querySelector("#showAllHistoryButton");
 const exportCsvButton = document.querySelector("#exportCsvButton");
 const historyStatus = document.querySelector("#historyStatus");
 const historyChart = document.querySelector("#historyChart");
@@ -96,6 +100,7 @@ const defaultThresholds = Object.freeze({
 });
 const readings = [];
 let historyReadings = [];
+let activeHistoryRange = null;
 let alertThresholds = loadThresholds();
 let emailNotificationSettings = loadEmailNotificationSettings();
 const lastEmailSentAt = loadEmailLastSentAt();
@@ -380,31 +385,55 @@ function normalizeReading(data) {
   };
 }
 
-function loadAllHistory() {
-  if (!db || !firestoreApi) return;
+function formatHistoryDate(date) {
+  return date.toLocaleDateString("vi-VN");
+}
 
+function historyDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function loadAllHistory() {
+  loadHistoryRange(null);
+}
+
+function loadHistoryRange(range) {
+  if (!db || !firestoreApi) return;
   stopHistoryFirestore();
   historyReadings = [];
+  activeHistoryRange = range;
   updateHistoryStatistics();
   updateExportButtonState();
-  historyStatus.textContent = "Đang kết nối dữ liệu lịch sử...";
+  historyStatus.textContent = range
+    ? `Đang tải dữ liệu từ ${formatHistoryDate(range.start)} đến ${formatHistoryDate(range.end)}...`
+    : "Đang kết nối toàn bộ dữ liệu lịch sử...";
 
   const historyRef = firestoreApi.collection(db, firestorePath.historyCollection);
-  const historyQuery = firestoreApi.query(
-    historyRef,
-    firestoreApi.orderBy("recordedAt", "asc"),
-  );
+  const constraints = [];
+  if (range) {
+    const endExclusive = new Date(range.end);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+    constraints.push(
+      firestoreApi.where("recordedAt", ">=", firestoreApi.Timestamp.fromDate(range.start)),
+      firestoreApi.where("recordedAt", "<", firestoreApi.Timestamp.fromDate(endExclusive)),
+    );
+  }
+  constraints.push(firestoreApi.orderBy("recordedAt", "asc"));
+  const historyQuery = firestoreApi.query(historyRef, ...constraints);
 
   unsubscribeHistory = firestoreApi.onSnapshot(
     historyQuery,
     (snapshot) => {
-      historyReadings = snapshot.docs
-        .map((document) => normalizeReading(document.data()))
-        .filter(Boolean);
-
+      historyReadings = snapshot.docs.map((document) => normalizeReading(document.data())).filter(Boolean);
+      const rangeLabel = activeHistoryRange
+        ? `từ ${formatHistoryDate(activeHistoryRange.start)} đến ${formatHistoryDate(activeHistoryRange.end)}`
+        : "trong toàn bộ lịch sử";
       historyStatus.textContent = historyReadings.length
-        ? `${historyReadings.length} mẫu trong toàn bộ lịch sử - đang cập nhật`
-        : "Chưa có dữ liệu lịch sử - đang theo dõi";
+        ? `${historyReadings.length} mẫu ${rangeLabel} - đang cập nhật`
+        : `Chưa có dữ liệu ${rangeLabel} - đang theo dõi`;
       updateHistoryStatistics();
       updateExportButtonState();
       resizeHistoryCanvas();
@@ -420,6 +449,25 @@ function loadAllHistory() {
   );
 }
 
+function applySelectedHistoryRange() {
+  if (!historyFromDate.value || !historyToDate.value) {
+    historyStatus.textContent = "Hãy chọn đầy đủ ngày bắt đầu và ngày kết thúc.";
+    return;
+  }
+  const start = new Date(`${historyFromDate.value}T00:00:00`);
+  const end = new Date(`${historyToDate.value}T00:00:00`);
+  if (start > end) {
+    historyStatus.textContent = "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.";
+    return;
+  }
+  loadHistoryRange({ start, end });
+}
+
+function showAllHistory() {
+  historyFromDate.value = "";
+  historyToDate.value = "";
+  loadAllHistory();
+}
 function updateHistoryStatistics() {
   const fields = [
     {
@@ -497,7 +545,9 @@ function exportHistoryCsv() {
   const humidityStats = calculateFieldStatistics("humidity");
   const rows = [
     ["BÁO CÁO DỮ LIỆU NHÀ KÍNH"],
-    ["Phạm vi báo cáo: Toàn bộ thời gian"],
+    [activeHistoryRange
+      ? `Phạm vi báo cáo: ${formatHistoryDate(activeHistoryRange.start)} - ${formatHistoryDate(activeHistoryRange.end)}`
+      : "Phạm vi báo cáo: Toàn bộ thời gian"],
     ["Số mẫu", historyReadings.length],
     [],
     ["Chỉ số", "Nhỏ nhất", "Lớn nhất", "Trung bình"],
@@ -518,7 +568,10 @@ function exportHistoryCsv() {
   const url = URL.createObjectURL(blob);
   const downloadLink = document.createElement("a");
   downloadLink.href = url;
-  downloadLink.download = `bao-cao-nha-kinh-toan-thoi-gian-${new Date().toISOString().slice(0, 10)}.csv`;
+  const rangeSuffix = activeHistoryRange
+    ? `${historyDateValue(activeHistoryRange.start)}_${historyDateValue(activeHistoryRange.end)}`
+    : "toan-thoi-gian";
+  downloadLink.download = `bao-cao-nha-kinh-${rangeSuffix}.csv`;
   document.body.append(downloadLink);
   downloadLink.click();
   downloadLink.remove();
@@ -1267,6 +1320,8 @@ logoutButton.addEventListener("click", async () => {
   }
 });
 
+applyHistoryRangeButton.addEventListener("click", applySelectedHistoryRange);
+showAllHistoryButton.addEventListener("click", showAllHistory);
 exportCsvButton.addEventListener("click", exportHistoryCsv);
 chartRangeSelect.addEventListener("change", updateRealtimeChartRange);
 thresholdForm.addEventListener("submit", async (event) => {

@@ -255,10 +255,14 @@
         <div class="section-head history-head">
           <div>
             <p class="eyebrow">Lịch sử</p>
-            <h2 id="historyTitle">Dữ liệu toàn thời gian</h2>
+            <h2 id="historyTitle">Dữ liệu lịch sử theo khoảng thời gian</h2>
           </div>
           <div class="history-actions">
-            <button id="exportCsvButton" class="export-button" type="button" disabled>Xuất toàn bộ dữ liệu</button>
+            <label class="history-picker" for="historyFromDate"><span>Từ ngày</span><input id="historyFromDate" type="date" /></label>
+            <label class="history-picker" for="historyToDate"><span>Đến ngày</span><input id="historyToDate" type="date" /></label>
+            <button id="applyHistoryRangeButton" class="secondary-button" type="button">Xem khoảng đã chọn</button>
+            <button id="showAllHistoryButton" class="secondary-button" type="button">Xem toàn bộ</button>
+            <button id="exportCsvButton" class="export-button" type="button" disabled>Xuất dữ liệu đang xem</button>
           </div>
         </div>
         <div class="history-meta">
@@ -268,7 +272,7 @@
             <span><i class="humid-dot"></i>Độ ẩm</span>
           </div>
         </div>
-        <div class="history-stats" aria-label="Thống kê dữ liệu toàn thời gian">
+        <div class="history-stats" aria-label="Thống kê dữ liệu lịch sử đang xem">
           <div class="history-stat-row temperature-stats">
             <strong>Nhiệt độ</strong>
             <span>Nhỏ nhất <b id="temperatureHistoryMin">--</b></span>
@@ -282,11 +286,11 @@
             <span>Trung bình <b id="humidityHistoryAverage">--</b></span>
           </div>
         </div>
-        <canvas id="historyChart" aria-label="Biểu đồ dữ liệu lịch sử toàn thời gian"></canvas>
+        <canvas id="historyChart" aria-label="Biểu đồ dữ liệu lịch sử đang xem"></canvas>
         <div id="historyTooltip" class="chart-tooltip" role="status"></div>
       </section>
     </main>
 
-    <script src="./script.js?v=32"></script>
+    <script src="./script.js?v=33"></script>
   </body>
 </html>

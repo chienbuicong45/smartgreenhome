@@ -534,6 +534,8 @@ h2 {
 
 .history-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 10px;
   align-items: flex-end;
 }
