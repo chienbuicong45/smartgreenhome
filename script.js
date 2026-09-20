@@ -112,6 +112,7 @@ let firestoreApi = null;
 let unsubscribeReadings = null;
 let unsubscribeHistory = null;
 let unsubscribeSettings = null;
+let unsubscribeWebcamImages = null;
 let latestReading = null;
 let latestReadingReceivedAt = 0;
 let connectionMonitorIntervalId = null;
@@ -143,7 +144,6 @@ async function startCamera() {
     stopCameraButton.disabled = false;
     setCameraStatus("Đang xem webcam máy tính", "live");
     clearTimeout(cameraRefreshTimeoutId);
-    cameraRefreshTimeoutId = setTimeout(loadComputerCameraFrame, 250);
   };
   cameraPreview.onerror = () => {
     cameraIsActive = false;
@@ -177,7 +177,43 @@ function stopCamera() {
   setCameraStatus("Camera đã tắt");
 }
 
-function addGalleryImage(source, label) {
+function stopWebcamImageFirestore() {
+  if (!unsubscribeWebcamImages) return;
+  unsubscribeWebcamImages();
+  unsubscribeWebcamImages = null;
+}
+
+function listenToWebcamImages() {
+  stopWebcamImageFirestore();
+  const imagesQuery = firestoreApi.query(
+    firestoreApi.collection(db, "webcam_images"),
+    firestoreApi.orderBy("capturedAt", "desc"),
+    firestoreApi.limit(30),
+  );
+  unsubscribeWebcamImages = firestoreApi.onSnapshot(
+    imagesQuery,
+    (snapshot) => {
+      imageGallery.querySelectorAll(".gallery-item").forEach((item) => item.remove());
+      snapshot.docs.forEach((imageDocument) => {
+        const image = imageDocument.data();
+        if (typeof image.imageDataUrl === "string" && image.imageDataUrl) {
+          addGalleryImage(
+            image.imageDataUrl,
+            image.label || "Ảnh webcam",
+            imageDocument.id,
+          );
+        }
+      });
+      galleryEmptyState.hidden = snapshot.docs.length > 0;
+    },
+    (error) => {
+      console.error("Không tải được thư viện ảnh webcam:", error);
+      setCameraStatus("Không tải được thư viện ảnh từ Firestore", "error");
+    },
+  );
+}
+
+function addGalleryImage(source, label, documentId = "") {
   galleryEmptyState.hidden = true;
   const figure = document.createElement("figure");
   const image = document.createElement("img");
@@ -187,27 +223,74 @@ function addGalleryImage(source, label) {
   image.alt = label;
   removeButton.type = "button";
   removeButton.textContent = "×";
-  removeButton.setAttribute("aria-label", `Xóa ${label}`);
-  removeButton.addEventListener("click", () => {
-    figure.remove();
-    galleryEmptyState.hidden = imageGallery.querySelectorAll(".gallery-item").length > 0;
+  removeButton.setAttribute("aria-label", "Xóa " + label);
+  removeButton.addEventListener("click", async () => {
+    try {
+      if (documentId) {
+        await firestoreApi.deleteDoc(
+          firestoreApi.doc(db, "webcam_images", documentId),
+        );
+      } else {
+        figure.remove();
+      }
+    } catch (error) {
+      console.error(error);
+      setCameraStatus("Không xóa được ảnh trên Firestore", "error");
+    }
   });
   figure.append(image, removeButton);
   imageGallery.append(figure);
 }
 
-function captureCameraImage() {
-  if (!cameraIsActive || !cameraPreview.naturalWidth) return;
+async function captureCameraImage() {
+  if (!cameraIsActive || !computerCameraStreamUrl || !auth?.currentUser) return;
+
+  captureButton.disabled = true;
+  setCameraStatus("Đang lưu khung hình lên Firestore...");
   try {
-    cameraCanvas.width = cameraPreview.naturalWidth;
-    cameraCanvas.height = cameraPreview.naturalHeight;
-    cameraCanvas.getContext("2d").drawImage(cameraPreview, 0, 0);
-    const timestamp = new Date().toLocaleString("vi-VN");
-    addGalleryImage(cameraCanvas.toDataURL("image/jpeg", 0.9), `Webcam máy tính lúc ${timestamp}`);
-    setCameraStatus(`Đã lưu khung hình lúc ${new Date().toLocaleTimeString("vi-VN")}`, "live");
+    const snapshotUrl = computerCameraStreamUrl.replace(
+      /\/stream(?:\.mjpg)?(?:\?.*)?$/,
+      "/snapshot.jpg",
+    );
+    const separator = snapshotUrl.includes("?") ? "&" : "?";
+    const response = await fetch(snapshotUrl + separator + "t=" + Date.now(), {
+      cache: "no-store",
+      mode: "cors",
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+
+    const blob = await response.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+    if (dataUrl.length > 900000) {
+      throw new Error("Ảnh vượt giới hạn an toàn của một tài liệu Firestore");
+    }
+
+    const capturedAt = new Date();
+    const label = "Webcam máy tính lúc " + capturedAt.toLocaleString("vi-VN");
+    await firestoreApi.addDoc(
+      firestoreApi.collection(db, "webcam_images"),
+      {
+        imageDataUrl: dataUrl,
+        imageMimeType: blob.type || "image/jpeg",
+        label,
+        capturedAt: firestoreApi.serverTimestamp(),
+        capturedBy: auth.currentUser.email || "",
+      },
+    );
+    setCameraStatus(
+      "Đã lưu ảnh lên Firestore lúc " + capturedAt.toLocaleTimeString("vi-VN"),
+      "live",
+    );
   } catch (error) {
     console.error(error);
-    setCameraStatus("Trình duyệt chặn lưu ảnh từ stream khác địa chỉ", "error");
+    setCameraStatus("Không lưu được ảnh lên Firestore. Hãy thử lại.", "error");
+  } finally {
+    captureButton.disabled = !cameraIsActive;
   }
 }
 
@@ -245,6 +328,7 @@ function showDashboardView() {
   authView.hidden = true;
   dashboardView.hidden = false;
   requestAnimationFrame(resizeCanvas);
+  listenToWebcamImages();
 }
 
 function setConnectionState(state, message) {
