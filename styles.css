@@ -1401,3 +1401,50 @@ summary:focus-visible,
     min-height: 260px;
   }
 }
+
+.gallery-item img { cursor: zoom-in; }
+.gallery-item img:focus-visible { outline: 3px solid var(--green); outline-offset: -3px; }
+.image-viewer {
+  width: min(94vw, 1100px);
+  max-width: none;
+  max-height: 92vh;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  overflow: visible;
+  background: transparent;
+}
+.image-viewer::backdrop { background: rgba(9, 18, 14, .82); backdrop-filter: blur(4px); }
+.image-viewer-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  max-height: 92vh;
+  padding: 16px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+}
+.image-viewer-card img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(92vh - 80px);
+  object-fit: contain;
+  border-radius: 12px;
+}
+.image-viewer-card p { margin: 0; color: var(--ink); text-align: center; }
+.image-viewer-close {
+  position: absolute;
+  z-index: 2;
+  top: -13px;
+  right: -13px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  background: #17211d;
+  color: #fff;
+  font-size: 1.45rem;
+  line-height: 1;
+}

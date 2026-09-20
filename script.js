@@ -213,6 +213,32 @@ function listenToWebcamImages() {
   );
 }
 
+function showGalleryImage(source, label) {
+  let dialog = document.querySelector("#galleryImageViewer");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "galleryImageViewer";
+    dialog.className = "image-viewer";
+    dialog.innerHTML =
+      '<div class="image-viewer-card">' +
+      '<button class="image-viewer-close" type="button" aria-label="Đóng ảnh">×</button>' +
+      '<img alt="" />' +
+      '<p></p>' +
+      '</div>';
+    document.body.append(dialog);
+    dialog.querySelector(".image-viewer-close").addEventListener("click", () => dialog.close());
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+  }
+
+  const viewerImage = dialog.querySelector("img");
+  const viewerLabel = dialog.querySelector("p");
+  viewerImage.src = source;
+  viewerImage.alt = label;
+  viewerLabel.textContent = label;
+  if (!dialog.open) dialog.showModal();
+}
 function addGalleryImage(source, label, documentId = "") {
   galleryEmptyState.hidden = true;
   const figure = document.createElement("figure");
@@ -221,6 +247,16 @@ function addGalleryImage(source, label, documentId = "") {
   figure.className = "gallery-item";
   image.src = source;
   image.alt = label;
+  image.tabIndex = 0;
+  image.setAttribute("role", "button");
+  image.setAttribute("aria-label", "Xem ảnh lớn: " + label);
+  image.addEventListener("click", () => showGalleryImage(source, label));
+  image.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      showGalleryImage(source, label);
+    }
+  });
   removeButton.type = "button";
   removeButton.textContent = "×";
   removeButton.setAttribute("aria-label", "Xóa " + label);
