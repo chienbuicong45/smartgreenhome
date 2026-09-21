@@ -81,6 +81,7 @@ const cameraStatus = document.querySelector("#cameraStatus");
 const startCameraButton = document.querySelector("#startCameraButton");
 const stopCameraButton = document.querySelector("#stopCameraButton");
 const captureButton = document.querySelector("#captureButton");
+const scanCameraButton = document.querySelector("#scanCameraButton");
 const imageGallery = document.querySelector("#imageGallery");
 const galleryEmptyState = document.querySelector("#galleryEmptyState");
 
@@ -122,6 +123,9 @@ let deviceIsOffline = false;
 let cameraIsActive = false;
 let computerCameraStreamUrl = "";
 let cameraRefreshTimeoutId = null;
+let scanRequestInProgress = false;
+let activeScanRequestId = "";
+let lastScanStatusKey = "";
 
 function setCameraStatus(message, state = "") {
   cameraStatus.textContent = message;
@@ -129,6 +133,35 @@ function setCameraStatus(message, state = "") {
   cameraStatus.classList.toggle("is-error", state === "error");
 }
 
+function updateScanButton() {
+  scanCameraButton.disabled = !cameraIsActive || scanRequestInProgress;
+}
+
+async function requestCameraScan() {
+  if (!cameraIsActive || !auth?.currentUser || scanRequestInProgress) return;
+  const requestId = globalThis.crypto?.randomUUID?.()
+    || `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  activeScanRequestId = requestId;
+  scanRequestInProgress = true;
+  updateScanButton();
+  setCameraStatus("\u0110ang g\u1eedi y\u00eau c\u1ea7u qu\u00e9t b\u1ec7nh t\u1edbi m\u00e1y t\u00ednh...");
+  try {
+    const settingsRef = firestoreApi.doc(db, firestorePath.settingsCollection, firestorePath.settingsDocument);
+    await firestoreApi.setDoc(settingsRef, {
+      manualCaptureRequestId: requestId,
+      manualCaptureStatus: "pending",
+      manualCaptureRequestedBy: auth.currentUser.email || "",
+      manualCaptureRequestedAt: firestoreApi.serverTimestamp(),
+      manualCaptureMessage: "\u0110ang ch\u1edd ch\u01b0\u01a1ng tr\u00ecnh camera qu\u00e9t \u1ea3nh",
+    }, { merge: true });
+  } catch (error) {
+    console.error(error);
+    activeScanRequestId = "";
+    scanRequestInProgress = false;
+    updateScanButton();
+    setCameraStatus("Kh\u00f4ng g\u1eedi \u0111\u01b0\u1ee3c y\u00eau c\u1ea7u qu\u00e9t b\u1ec7nh.", "error");
+  }
+}
 async function startCamera() {
   if (!computerCameraStreamUrl) {
     setCameraStatus("Chưa có địa chỉ webcam máy tính", "error");
@@ -141,6 +174,7 @@ async function startCamera() {
     cameraPreview.classList.add("is-active");
     cameraPlaceholder.hidden = true;
     captureButton.disabled = false;
+    updateScanButton();
     stopCameraButton.disabled = false;
     setCameraStatus("Đang xem webcam máy tính", "live");
     clearTimeout(cameraRefreshTimeoutId);
@@ -151,6 +185,7 @@ async function startCamera() {
     cameraPlaceholder.hidden = false;
     startCameraButton.disabled = false;
     captureButton.disabled = true;
+    updateScanButton();
     stopCameraButton.disabled = true;
     setCameraStatus("Không kết nối được chương trình webcam trên máy tính", "error");
     clearTimeout(cameraRefreshTimeoutId);
@@ -173,6 +208,7 @@ function stopCamera() {
   cameraPlaceholder.hidden = false;
   startCameraButton.disabled = false;
   captureButton.disabled = true;
+  updateScanButton();
   stopCameraButton.disabled = true;
   setCameraStatus("Camera đã tắt");
 }
@@ -316,6 +352,7 @@ async function captureCameraImage() {
         label,
         capturedAt: firestoreApi.serverTimestamp(),
         capturedBy: auth.currentUser.email || "",
+        capturedFrom: "web",
       },
     );
     setCameraStatus(
@@ -799,6 +836,25 @@ function applySharedSettings(data) {
     } else if (data.cameraOnline === false) {
       if (cameraIsActive) stopCamera();
       setCameraStatus("Chương trình webcam trên máy tính đang tắt");
+    }
+  }
+  const scanRequestId = typeof data.manualCaptureRequestId === "string" ? data.manualCaptureRequestId : "";
+  const scanStatus = typeof data.manualCaptureStatus === "string" ? data.manualCaptureStatus : "";
+  const scanStatusKey = `${scanRequestId}:${scanStatus}`;
+  const firstScanObservation = !lastScanStatusKey;
+  const scanStatusChanged = scanStatusKey !== lastScanStatusKey;
+  lastScanStatusKey = scanStatusKey;
+  scanRequestInProgress = scanStatus === "pending" || scanStatus === "processing";
+  updateScanButton();
+  if (scanStatusChanged && !firstScanObservation) {
+    if (scanRequestInProgress) {
+      setCameraStatus(scanStatus === "processing" ? "M\u00e1y t\u00ednh \u0111ang qu\u00e9t \u1ea3nh b\u1eb1ng model YOLO..." : "\u0110ang ch\u1edd m\u00e1y t\u00ednh nh\u1eadn y\u00eau c\u1ea7u qu\u00e9t...", "live");
+    } else if (scanRequestId === activeScanRequestId && scanStatus === "completed") {
+      activeScanRequestId = "";
+      setCameraStatus("Qu\u00e9t xong. \u1ea2nh k\u1ebft qu\u1ea3 \u0111\u00e3 \u0111\u01b0\u1ee3c l\u01b0u v\u00e0o th\u01b0 vi\u1ec7n.", "live");
+    } else if (scanRequestId === activeScanRequestId && scanStatus === "failed") {
+      activeScanRequestId = "";
+      setCameraStatus(data.manualCaptureMessage || "Kh\u00f4ng qu\u00e9t \u0111\u01b0\u1ee3c \u1ea3nh b\u1eb1ng model.", "error");
     }
   }
   if (latestReading) updateDashboard(latestReading);
@@ -1551,6 +1607,7 @@ historyChart.addEventListener("pointerleave", () => hideReadingTooltip(historyTo
 startCameraButton.addEventListener("click", startCamera);
 stopCameraButton.addEventListener("click", stopCamera);
 captureButton.addEventListener("click", captureCameraImage);
+scanCameraButton.addEventListener("click", requestCameraScan);
 
 window.addEventListener("resize", () => {
   cancelAnimationFrame(resizeFrameId);
