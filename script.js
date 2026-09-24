@@ -90,7 +90,6 @@ const connectionCheckIntervalMs = 1000;
 const deviceStaleAfterMs = 15000;
 const thresholdStorageKey = "greenhouse-alert-thresholds";
 const emailNotificationStorageKey = "greenhouse-email-notifications";
-const loginHistoryStorageKey = "greenhouse-login-history";
 const emailLastSentStorageKey = "greenhouse-email-last-sent";
 const emailNotificationCooldown = 15 * 60 * 1000;
 const defaultThresholds = Object.freeze({
@@ -394,6 +393,7 @@ function showAuthView(message = "") {
   stopReadingFirestore();
   stopHistoryFirestore();
   stopSettingsFirestore();
+  stopSharedLogs();
   stopConnectionMonitor();
 }
 
@@ -457,9 +457,9 @@ async function setupFirebase() {
       readings.splice(0, readings.length);
       updateRealtimeDataPresentation("Đang chờ dữ liệu từ thiết bị...");
       eventLog.replaceChildren();
-      renderLoginHistory();
+      listenToSharedLogs();
       setConnectionState("connecting", "Đang kết nối Firestore");
-      addEvent(`Đã đăng nhập: ${user.email}`);
+
       if (!emailNotificationSettings.email) {
         emailNotificationSettings.email = user.email || "";
         fillEmailNotificationForm();
@@ -1040,21 +1040,74 @@ function updateDashboard(reading) {
   if (humidityLevel !== "normal") void queueAlertEmail(`humidity-${humidityLevel}`, humidityMessage, reading);
 }
 
-function addEvent(message, level = "normal") {
-  const last = eventLog.firstElementChild;
-  if (last && last.dataset.message === message) return;
-
-  const item = document.createElement("li");
-  const time = document.createElement("strong");
-  item.className = level === "normal" ? "" : level;
-  item.dataset.message = message;
-  time.textContent = new Date().toLocaleTimeString("vi-VN");
-  item.append(time, document.createTextNode(message));
-  eventLog.prepend(item);
-
-  while (eventLog.children.length > 6) {
-    eventLog.lastElementChild.remove();
+const sharedLogStops = [];
+const recentLogMessages = new Map();
+function stopSharedLogs() {
+  sharedLogStops.splice(0).forEach(stop => stop());
+  recentLogMessages.clear();
+}
+function logSyncError(target, error) {
+  console.error("Log synchronization failed", error);
+  let notice = target.previousElementSibling;
+  if (!notice?.classList.contains("log-sync-status")) {
+    notice = document.createElement("p");
+    notice.className = "log-sync-status";
+    notice.setAttribute("role", "status");
+    target.before(notice);
   }
+  notice.textContent = "Không thể đồng bộ nhật kí. Kiểm tra kết nối và quyền Firestore.";
+}
+function listenToSharedLogs() {
+  stopSharedLogs();
+  for (const [collectionName, target, isLogin] of [
+    ["greenhouse_login_history", loginHistoryLog, true],
+    ["greenhouse_system_logs", eventLog, false],
+  ]) {
+    target.replaceChildren();
+    const query = firestoreApi.query(firestoreApi.collection(db, collectionName),
+      firestoreApi.orderBy("createdAt", "desc"), firestoreApi.limit(50));
+    sharedLogStops.push(firestoreApi.onSnapshot(query, snapshot => {
+      target.replaceChildren();
+      if (target.previousElementSibling?.classList.contains("log-sync-status")) {
+        target.previousElementSibling.textContent = snapshot.metadata.fromCache
+          ? "Đang hiển thị dữ liệu đã lưu; chờ đồng bộ máy chủ." : "";
+      }
+      if (snapshot.empty) {
+        const item = document.createElement("li");
+        item.textContent = isLogin ? "Chưa có lịch sử đăng nhập chung." : "Chưa có nhật kí hệ thống.";
+        target.append(item);
+      }
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const item = document.createElement("li");
+        const time = document.createElement("strong");
+        const date = data.createdAt?.toDate?.();
+        time.textContent = date ? date.toLocaleString("vi-VN") : "Đang đồng bộ...";
+        item.className = ["warning", "danger"].includes(data.level) ? data.level : "";
+        item.append(time, document.createTextNode(
+          (isLogin ? data.email || "" : data.message || "") + " · " + (data.source || "")
+        ));
+        target.append(item);
+      });
+    }, error => logSyncError(target, error)));
+  }
+}
+function writeSharedLog(collectionName, data, target) {
+  if (!auth?.currentUser || !db) return;
+  return firestoreApi.addDoc(firestoreApi.collection(db, collectionName), {
+    ...data, uid: auth.currentUser.uid, email: auth.currentUser.email || "",
+    source: "Web", createdAt: firestoreApi.serverTimestamp(),
+  }).catch(error => logSyncError(target, error));
+}
+function addEvent(message, level = "normal") {
+  const key = level + ":" + message;
+  const now = Date.now();
+  if (now - (recentLogMessages.get(key) || 0) < 60000) return;
+  recentLogMessages.set(key, now);
+  for (const [oldKey, at] of recentLogMessages) {
+    if (now - at >= 60000) recentLogMessages.delete(oldKey);
+  }
+  void writeSharedLog("greenhouse_system_logs", {message, level}, eventLog);
 }
 
 function getRealtimeMaxPoints() {
@@ -1124,51 +1177,9 @@ function updateRealtimeChartRange() {
   drawChart();
 }
 
-function loadLoginHistory() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(loginHistoryStorageKey));
-    return Array.isArray(saved)
-      ? saved.filter((entry) => typeof entry?.email === "string" && Number.isFinite(entry?.timestamp)).slice(0, 10)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function renderLoginHistory() {
-  const history = loadLoginHistory();
-  loginHistoryLog.replaceChildren();
-
-  if (!history.length) {
-    const emptyItem = document.createElement("li");
-    emptyItem.className = "empty-log-item";
-    emptyItem.textContent = "Chưa có lần đăng nhập nào được lưu trên thiết bị này.";
-    loginHistoryLog.append(emptyItem);
-    return;
-  }
-
-  history.forEach((entry) => {
-    const item = document.createElement("li");
-    const time = document.createElement("strong");
-    const email = document.createElement("span");
-    time.textContent = new Date(entry.timestamp).toLocaleString("vi-VN");
-    email.textContent = entry.email;
-    item.append(time, email);
-    loginHistoryLog.append(item);
-  });
-}
-
 function rememberSuccessfulLogin(email) {
-  const history = loadLoginHistory();
-  history.unshift({ email, timestamp: Date.now() });
-
-  try {
-    localStorage.setItem(loginHistoryStorageKey, JSON.stringify(history.slice(0, 10)));
-  } catch {
-    // The login still succeeds when the browser blocks local storage.
-  }
-
-  renderLoginHistory();
+  void writeSharedLog("greenhouse_login_history", {email}, loginHistoryLog);
+  addEvent('Đã đăng nhập: ' + email);
 }
 
 function resizeCanvas() {
@@ -1622,6 +1633,7 @@ window.addEventListener("beforeunload", () => {
   stopReadingFirestore();
   stopHistoryFirestore();
   stopSettingsFirestore();
+  stopSharedLogs();
 });
 
 fillThresholdForm();
