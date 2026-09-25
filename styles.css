@@ -1448,3 +1448,11 @@ summary:focus-visible,
   font-size: 1.45rem;
   line-height: 1;
 }
+/* Android application download */
+.app-download-card { margin: 20px 0; padding: 20px; border: 1px solid #cfe3db; border-radius: 20px; background: #f4fbf7; color: #193d32; }
+.app-download-card h2 { margin: 0 0 8px; font-size: 1.2rem; }
+.app-download-card p { margin: 8px 0; line-height: 1.6; }
+.app-download-button { display: inline-block; margin: 8px 0 12px; padding: 12px 18px; background: #0f766e; color: #fff; border-radius: 12px; font-weight: 700; text-decoration: none; }
+.app-download-button:hover { background: #115e59; }
+.app-download-button:focus-visible { outline: 3px solid #d97706; outline-offset: 3px; }
+.app-download-card summary { cursor: pointer; padding: 6px 0; }
