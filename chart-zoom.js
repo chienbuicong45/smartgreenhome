@@ -60,7 +60,7 @@
       }
       ctx.textAlign = "left";
       ctx.fillText("40°C / 100%", 4, 13);
-      ctx.fillText("18°C / 30%", 4, pad.top + height + 12);
+      ctx.fillText("0°C / 0%", 4, pad.top + height + 12);
       toolbar.querySelectorAll("button").forEach(button => button.disabled = data.length < 2);
       if (!data.length) { status.textContent = "Chưa có dữ liệu"; return; }
       const zoom = 1 / (view.end - view.start);
@@ -77,15 +77,22 @@
       const end = Math.min(data.length, lowerBound(data, times.to) + 1);
       ctx.save(); ctx.beginPath(); ctx.rect(pad.left, pad.top, width, height); ctx.clip();
       for (const [field, color, min, max] of [
-        ["temperature", "#d95f48", 18, 40], ["humidity", "#2d7fb8", 30, 100]
+        ["temperature", "#d95f48", 0, 40], ["humidity", "#2d7fb8", 0, 100]
       ]) {
         ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
         ctx.beginPath();
+        let previousY;
         for (let i = begin; i < end; i++) {
           const x = pad.left + (+data[i].time - times.from) / (times.to - times.from) * width;
           const normalized = Math.max(0, Math.min(1, (data[i][field] - min) / (max - min)));
           const y = pad.top + height * (1 - normalized);
-          if (i === begin) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          if (i === begin) ctx.moveTo(x, y);
+          else {
+            // Hold the previous measurement until the new sample timestamp.
+            ctx.lineTo(x, previousY);
+            ctx.lineTo(x, y);
+          }
+          previousY = y;
           if (data.length === 1) { ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); }
         }
         ctx.stroke();
@@ -110,9 +117,9 @@
       const times = timeWindow(data);
       const time = times.from + fraction(event.clientX) * (times.to - times.from);
       let i = Math.min(data.length - 1, lowerBound(data, time));
-      if (i > 0 && time - +data[i - 1].time < +data[i].time - time) i--;
+      if (i > 0 && +data[i].time > time) i--;
       const reading = data[i];
-      if (+reading.time < times.from || +reading.time > times.to) return hide();
+      if (time < +data[0].time || time > +data[data.length - 1].time) return hide();
       const value = document.createElement("strong"), date = document.createElement("span");
       value.textContent = reading.temperature.toFixed(1) + "°C · " + reading.humidity.toFixed(1) + "%";
       date.textContent = reading.time.toLocaleString("vi-VN");

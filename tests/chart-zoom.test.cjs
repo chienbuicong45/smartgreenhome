@@ -1,7 +1,17 @@
 const fs = require("node:fs"), vm = require("node:vm"), assert = require("node:assert/strict");
 const events = {}, toolbarEvents = {}, labels = [], frames = [];
 const status = { textContent: "" }, buttons = [{}, {}, {}];
-const ctx = new Proxy({}, { get: (target, key) => target[key] || (key === "fillText"
+const segments = [];
+let lastPoint;
+const drawing = {
+ beginPath() { lastPoint = null; },
+ moveTo(x, y) { lastPoint = [x, y]; },
+ lineTo(x, y) {
+   if (lastPoint) segments.push({ from: lastPoint, to: [x, y] });
+   lastPoint = [x, y];
+ }
+};
+const ctx = new Proxy(drawing, { get: (target, key) => target[key] || (key === "fillText"
   ? (text) => labels.push(text) : () => {}), set: (target,key,value) => (target[key]=value,true) });
 const captures = new Set();
 const canvas = {
@@ -43,5 +53,15 @@ events.pointerdown({button:0,pointerId:2,clientX:220,clientY:130});
 events.pointermove({pointerId:2,clientX:320,clientY:130});flush();assert.equal(status.textContent,"Zoom 2.0×");
 events.pointercancel({pointerId:1,type:"pointercancel"});events.pointercancel({pointerId:2,type:"pointercancel"});
 panel.reset();flush();assert.equal(status.textContent,"Zoom 1.0×");
+data = [
+ {time:new Date(2026,8,23,8),temperature:30,humidity:80},
+ {time:new Date(2026,8,23,9),temperature:0,humidity:0},
+ {time:new Date(2026,8,23,10),temperature:28,humidity:70}
+];
+segments.length = 0;
+panel.draw();
+assert(segments.every(segment => segment.from[0] === segment.to[0] || segment.from[1] === segment.to[1]), 'no diagonal transitions');
+assert(segments.some(segment => segment.from[1] === 252 && segment.to[1] === 252 && segment.to[0] > segment.from[0]), 'zero interval stays on plot floor');
+assert(labels.some(text => text.startsWith('0') && text.endsWith('/ 0%')), 'axis starts at zero');
 data=[];panel.draw();assert(buttons.every(x=>x.disabled));
 console.log("PASS bounded zoom, pan, pinch, reset, time labels and empty data");
