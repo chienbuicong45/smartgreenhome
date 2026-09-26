@@ -22,7 +22,8 @@ const canvas = {
   setPointerCapture: id => captures.add(id), hasPointerCapture:id=>captures.has(id),
   releasePointerCapture:id=>captures.delete(id),
 };
-const toolbar = { querySelector:()=>status, querySelectorAll:()=>buttons,
+const selector = {value:"both", addEventListener:(_, listener)=>{selector.change=listener;}};
+const toolbar = { querySelector:(key)=>key === ".chart-series-select" ? selector : status, querySelectorAll:()=>buttons,
   addEventListener:(type,listener)=>toolbarEvents[type]=listener };
 const tooltip = { classList:{remove(){}},style:{},replaceChildren(...children){this.children=children;} };
 const sandbox = { window:{}, document:{querySelector:()=>toolbar,createElement:()=>({})},
@@ -63,5 +64,10 @@ panel.draw();
 assert(segments.every(segment => segment.from[0] === segment.to[0] || segment.from[1] === segment.to[1]), 'no diagonal transitions');
 assert(segments.some(segment => segment.from[1] === 252 && segment.to[1] === 252 && segment.to[0] > segment.from[0]), 'zero interval stays on plot floor');
 assert(labels.some(text => text.startsWith('0') && text.endsWith('/ 0%')), 'axis starts at zero');
+selector.value = "temperature"; selector.change(); flush();
+assert(labels.at(-1) !== undefined);
+assert(labels.includes("40"+String.fromCharCode(176)+"C"));
+selector.value = "humidity"; selector.change(); flush();
+assert(labels.includes("100%"));
 data=[];panel.draw();assert(buttons.every(x=>x.disabled));
 console.log("PASS bounded zoom, pan, pinch, reset, time labels and empty data");

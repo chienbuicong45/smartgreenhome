@@ -80,9 +80,9 @@
       <section class="app-download-card" aria-labelledby="appDownloadTitle">
         <div>
           <h2 id="appDownloadTitle">Ứng dụng Android</h2>
-          <p>Greenhouse Monitor · Phiên bản 1.0.8 · 55 MB</p>
-          <p>Cập nhật 26/09/2026: biểu đồ hiển thị ngày giờ, phóng to, thu nhỏ và kéo ngang để xem chi tiết.</p>
-          <a class="app-download-button" href="https://github.com/chienbuicong45/smartgreenhome/releases/download/android-v1.0.8/greenhouse-monitor-v1.0.8.apk" download>Tải ứng dụng Android (.apk)</a>
+          <p>Greenhouse Monitor · Phiên bản 1.0.9 · 55 MB</p>
+          <p>Cập nhật 26/09/2026: xem riêng biểu đồ nhiệt độ hoặc độ ẩm, giữ chức năng zoom và kéo ngang.</p>
+          <a class="app-download-button" href="https://github.com/chienbuicong45/smartgreenhome/releases/download/android-v1.0.9/greenhouse-monitor-v1.0.9.apk" download>Tải ứng dụng Android (.apk)</a>
           <details>
             <summary>Hướng dẫn cài đặt</summary>
             <p>Tải file, mở APK trên điện thoại Android rồi chọn Cài đặt hoặc Cập nhật.
@@ -176,6 +176,13 @@
             </div>
           </div>
 <div class="chart-zoom-tools" data-chart-tools="environmentChart">
+            <label>Xem biểu đồ
+              <select class="chart-series-select" aria-label="Chọn chỉ số biểu đồ">
+                <option value="both">Cả hai</option>
+                <option value="temperature">Nhiệt độ (°C)</option>
+                <option value="humidity">Độ ẩm (%)</option>
+              </select>
+            </label>
             <button type="button" data-zoom="in" aria-label="Phóng to biểu đồ">＋ Phóng to</button>
             <button type="button" data-zoom="out" aria-label="Thu nhỏ biểu đồ">− Thu nhỏ</button>
             <button type="button" data-zoom="reset">Xem toàn khoảng</button>
@@ -312,6 +319,13 @@
           </div>
         </div>
 <div class="chart-zoom-tools" data-chart-tools="historyChart">
+            <label>Xem biểu đồ
+              <select class="chart-series-select" aria-label="Chọn chỉ số biểu đồ">
+                <option value="both">Cả hai</option>
+                <option value="temperature">Nhiệt độ (°C)</option>
+                <option value="humidity">Độ ẩm (%)</option>
+              </select>
+            </label>
             <button type="button" data-zoom="in" aria-label="Phóng to biểu đồ">＋ Phóng to</button>
             <button type="button" data-zoom="out" aria-label="Thu nhỏ biểu đồ">− Thu nhỏ</button>
             <button type="button" data-zoom="reset">Xem toàn khoảng</button>
@@ -323,7 +337,7 @@
       </section>
     </main>
 
-    <script src="./chart-zoom.js?v=2"></script>
+    <script src="./chart-zoom.js?v=3"></script>
     <script src="./script.js?v=38"></script>
   </body>
 </html>

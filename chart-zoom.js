@@ -28,6 +28,11 @@
     const ctx = canvas.getContext("2d");
     const toolbar = document.querySelector('[data-chart-tools="' + canvas.id + '"]');
     const status = toolbar.querySelector(".chart-zoom-status");
+    const selector = toolbar.querySelector(".chart-series-select");
+    let mode = selector ? selector.value : "both";
+    if (selector) selector.addEventListener("change", () => {
+      mode = selector.value; schedule();
+    });
     const pointers = new Map();
     let view = { start: 0, end: 1 }, frame = 0, moved = false, gesture = null;
     const pad = { left: 42, right: 18, top: 20, bottom: 48 };
@@ -59,8 +64,8 @@
         ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + width, y); ctx.stroke();
       }
       ctx.textAlign = "left";
-      ctx.fillText("40°C / 100%", 4, 13);
-      ctx.fillText("0°C / 0%", 4, pad.top + height + 12);
+      ctx.fillText(mode === "temperature" ? "40°C" : mode === "humidity" ? "100%" : "40°C / 100%", 4, 13);
+      ctx.fillText(mode === "temperature" ? "0°C" : mode === "humidity" ? "0%" : "0°C / 0%", 4, pad.top + height + 12);
       toolbar.querySelectorAll("button").forEach(button => button.disabled = data.length < 2);
       if (!data.length) { status.textContent = "Chưa có dữ liệu"; return; }
       const zoom = 1 / (view.end - view.start);
@@ -79,6 +84,7 @@
       for (const [field, color, min, max] of [
         ["temperature", "#d95f48", 0, 40], ["humidity", "#2d7fb8", 0, 100]
       ]) {
+        if (mode !== "both" && mode !== field) continue;
         ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
         ctx.beginPath();
         let previousY;
@@ -121,7 +127,9 @@
       const reading = data[i];
       if (time < +data[0].time || time > +data[data.length - 1].time) return hide();
       const value = document.createElement("strong"), date = document.createElement("span");
-      value.textContent = reading.temperature.toFixed(1) + "°C · " + reading.humidity.toFixed(1) + "%";
+      value.textContent = mode === "temperature" ? reading.temperature.toFixed(1) + "°C"
+        : mode === "humidity" ? reading.humidity.toFixed(1) + "%"
+        : reading.temperature.toFixed(1) + "°C · " + reading.humidity.toFixed(1) + "%";
       date.textContent = reading.time.toLocaleString("vi-VN");
       tooltip.replaceChildren(value, date);
       const card = canvas.closest(".chart-card, .history-card").getBoundingClientRect();
