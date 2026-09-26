@@ -1456,3 +1456,11 @@ summary:focus-visible,
 .app-download-button:hover { background: #115e59; }
 .app-download-button:focus-visible { outline: 3px solid #d97706; outline-offset: 3px; }
 .app-download-card summary { cursor: pointer; padding: 6px 0; }
+
+.chart-zoom-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 6px; }
+.chart-zoom-tools button { padding: 9px 12px; border: 1px solid #bdd9ce; border-radius: 10px; background: #edf7f2; color: #174f3d; font: inherit; cursor: pointer; }
+.chart-zoom-tools button:disabled { opacity: .5; cursor: default; }
+.chart-zoom-tools button:focus-visible, #environmentChart:focus-visible, #historyChart:focus-visible { outline: 3px solid #d98b2b; outline-offset: 2px; }
+.chart-zoom-status, .chart-zoom-hint { color: #66736d; font-size: 12px; }
+#environmentChart, #historyChart { touch-action: none; cursor: grab; }
+#environmentChart:active, #historyChart:active { cursor: grabbing; }

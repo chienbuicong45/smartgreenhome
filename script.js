@@ -386,6 +386,8 @@ function getFirebaseErrorText(error) {
 }
 
 function showAuthView(message = "") {
+  realtimeZoom.reset();
+  historyZoom.reset();
   authView.hidden = false;
   dashboardView.hidden = true;
   authMessage.textContent = message;
@@ -558,6 +560,7 @@ function loadAllHistory() {
 }
 
 function loadHistoryRange(range) {
+  historyZoom.reset();
   if (!db || !firestoreApi) return;
   stopHistoryFirestore();
   historyReadings = [];
@@ -1170,6 +1173,7 @@ function updateRealtimeDataPresentation(message = "") {
 }
 
 function updateRealtimeChartRange() {
+  realtimeZoom.reset();
   chartRangeSeconds = Number(chartRangeSelect.value);
   realtimeChartTitle.textContent = `Dữ liệu ${chartRangeSeconds} giây gần nhất`;
   trimRealtimeReadings();
@@ -1194,259 +1198,17 @@ function resizeCanvas() {
   drawChart();
 }
 
-function drawChart() {
-  const rect = chart.getBoundingClientRect();
-  const width = rect.width;
-  const height = rect.height;
-  const padding = { top: 20, right: 18, bottom: 32, left: 42 };
-  const plotWidth = width - padding.left - padding.right;
-  const plotHeight = height - padding.top - padding.bottom;
-
-  context.clearRect(0, 0, width, height);
-  drawGrid(width, height, padding, plotWidth, plotHeight);
-
-  if (readings.length < 2) return;
-
-  drawLine({
-    color: "#d95f48",
-    points: readings.map((item) => item.temperature),
-    min: 18,
-    max: 40,
-    padding,
-    plotWidth,
-    plotHeight,
-  });
-
-  drawLine({
-    color: "#2d7fb8",
-    points: readings.map((item) => item.humidity),
-    min: 30,
-    max: 100,
-    padding,
-    plotWidth,
-    plotHeight,
-  });
-}
-
-function drawGrid(width, height, padding, plotWidth, plotHeight) {
-  context.strokeStyle = "#e2e9e3";
-  context.lineWidth = 1;
-  context.fillStyle = "#66736d";
-  context.font = "12px Inter, system-ui, sans-serif";
-
-  for (let index = 0; index <= 4; index += 1) {
-    const y = padding.top + (plotHeight / 4) * index;
-    context.beginPath();
-    context.moveTo(padding.left, y);
-    context.lineTo(width - padding.right, y);
-    context.stroke();
-  }
-
-  context.fillText("40°C / 100%", 4, padding.top + 4);
-  context.fillText("18°C / 30%", 6, height - padding.bottom);
-  const rangeLabel = `${chartRangeSeconds} giây trước`;
-  context.fillText(rangeLabel, padding.left, height - 8);
-  const currentLabel = "Hiện tại";
-  const currentLabelWidth = context.measureText(currentLabel).width;
-  context.fillText(currentLabel, width - padding.right - currentLabelWidth, height - 8);
-}
-
-function drawLine({ color, points, min, max, padding, plotWidth, plotHeight }) {
-  context.strokeStyle = color;
-  context.lineWidth = 3;
-  context.lineJoin = "round";
-  context.lineCap = "round";
-  context.beginPath();
-
-  const maxPoints = getRealtimeMaxPoints();
-  points.forEach((value, index) => {
-    const x = padding.left + (plotWidth / Math.max(maxPoints - 1, 1)) * index;
-    const normalized = (value - min) / (max - min);
-    const y = padding.top + plotHeight - clamp(normalized, 0, 1) * plotHeight;
-
-    if (index === 0) {
-      context.moveTo(x, y);
-    } else {
-      context.lineTo(x, y);
-    }
-  });
-
-  context.stroke();
-}
-
+function drawChart() { realtimeZoom.draw(); }
 function resizeHistoryCanvas() {
-  const ratio = window.devicePixelRatio || 1;
   const rect = historyChart.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
-
+  const ratio = window.devicePixelRatio || 1;
   historyChart.width = Math.floor(rect.width * ratio);
   historyChart.height = Math.floor(rect.height * ratio);
   historyContext.setTransform(ratio, 0, 0, ratio, 0, 0);
   drawHistoryChart();
 }
-
-function drawHistoryChart() {
-  const rect = historyChart.getBoundingClientRect();
-  const width = rect.width;
-  const height = rect.height;
-  const padding = { top: 20, right: 18, bottom: 36, left: 42 };
-  const plotWidth = width - padding.left - padding.right;
-  const plotHeight = height - padding.top - padding.bottom;
-
-  historyContext.clearRect(0, 0, width, height);
-  historyContext.strokeStyle = "#e2e9e3";
-  historyContext.fillStyle = "#66736d";
-  historyContext.font = "12px Inter, system-ui, sans-serif";
-  historyContext.lineWidth = 1;
-
-  for (let index = 0; index <= 4; index += 1) {
-    const y = padding.top + (plotHeight / 4) * index;
-    historyContext.beginPath();
-    historyContext.moveTo(padding.left, y);
-    historyContext.lineTo(width - padding.right, y);
-    historyContext.stroke();
-  }
-
-  historyContext.fillText("40°C / 100%", 4, padding.top + 4);
-  historyContext.fillText("18°C / 30%", 6, height - padding.bottom);
-  if (!historyReadings.length) return;
-
-  const firstTime = historyReadings[0].time.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const lastTime = historyReadings.at(-1).time.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  historyContext.fillText(firstTime, padding.left, height - 8);
-  const lastTimeWidth = historyContext.measureText(lastTime).width;
-  historyContext.fillText(lastTime, width - padding.right - lastTimeWidth, height - 8);
-
-  drawHistoryLine("#d95f48", "temperature", 18, 40, padding, plotWidth, plotHeight);
-  drawHistoryLine("#2d7fb8", "humidity", 30, 100, padding, plotWidth, plotHeight);
-}
-
-function drawHistoryLine(color, field, min, max, padding, plotWidth, plotHeight) {
-  historyContext.strokeStyle = color;
-  historyContext.fillStyle = color;
-  historyContext.lineWidth = 2;
-  historyContext.lineJoin = "round";
-  historyContext.lineCap = "round";
-
-  if (historyReadings.length === 1) {
-    const normalized = (historyReadings[0][field] - min) / (max - min);
-    const x = padding.left + plotWidth / 2;
-    const y = padding.top + plotHeight - clamp(normalized, 0, 1) * plotHeight;
-
-    historyContext.beginPath();
-    historyContext.arc(x, y, 5, 0, Math.PI * 2);
-    historyContext.fill();
-    return;
-  }
-
-  historyContext.beginPath();
-
-  const denominator = Math.max(historyReadings.length - 1, 1);
-  historyReadings.forEach((reading, index) => {
-    const x = padding.left + (plotWidth / denominator) * index;
-    const normalized = (reading[field] - min) / (max - min);
-    const y = padding.top + plotHeight - clamp(normalized, 0, 1) * plotHeight;
-
-    if (index === 0) historyContext.moveTo(x, y);
-    else historyContext.lineTo(x, y);
-  });
-
-  historyContext.stroke();
-}
-
-function showReadingTooltip(event, isHistory) {
-  const targetChart = isHistory ? historyChart : chart;
-  const tooltip = isHistory ? historyTooltip : realtimeTooltip;
-  const source = isHistory ? historyReadings : readings;
-  const rect = targetChart.getBoundingClientRect();
-
-  if (!source.length || !rect.width || !rect.height) {
-    tooltip.classList.remove("is-visible");
-    return;
-  }
-
-  const padding = isHistory
-    ? { top: 20, right: 18, bottom: 36, left: 42 }
-    : { top: 20, right: 18, bottom: 32, left: 42 };
-  const plotWidth = rect.width - padding.left - padding.right;
-  const plotHeight = rect.height - padding.top - padding.bottom;
-  const pointerX = event.clientX - rect.left;
-  const pointerY = event.clientY - rect.top;
-  const denominator = isHistory
-    ? Math.max(source.length - 1, 1)
-    : Math.max(getRealtimeMaxPoints() - 1, 1);
-  const step = plotWidth / denominator;
-
-  let nearestIndex = 0;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  source.forEach((reading, index) => {
-    const pointX = isHistory && source.length === 1
-      ? padding.left + plotWidth / 2
-      : padding.left + step * index;
-    const distance = Math.abs(pointerX - pointX);
-    if (distance < nearestDistance) {
-      nearestDistance = distance;
-      nearestIndex = index;
-    }
-  });
-
-  if (nearestDistance > Math.max(14, step / 2 + 4)) {
-    tooltip.classList.remove("is-visible");
-    return;
-  }
-
-  const reading = source[nearestIndex];
-  const position = isHistory && source.length === 1
-    ? 0
-    : clamp((pointerX - padding.left) / step, 0, source.length - 1);
-  const lowerIndex = Math.floor(position);
-  const upperIndex = Math.min(source.length - 1, Math.ceil(position));
-  const progress = position - lowerIndex;
-  const hoverTemperature = source[lowerIndex].temperature
-    + (source[upperIndex].temperature - source[lowerIndex].temperature) * progress;
-  const hoverHumidity = source[lowerIndex].humidity
-    + (source[upperIndex].humidity - source[lowerIndex].humidity) * progress;
-  const temperatureY = padding.top + plotHeight
-    - clamp((hoverTemperature - 18) / (40 - 18), 0, 1) * plotHeight;
-  const humidityY = padding.top + plotHeight
-    - clamp((hoverHumidity - 30) / (100 - 30), 0, 1) * plotHeight;
-  const isTemperature = Math.abs(pointerY - temperatureY) <= Math.abs(pointerY - humidityY);
-  const pointY = isTemperature ? temperatureY : humidityY;
-
-  if (Math.abs(pointerY - pointY) > 30) {
-    tooltip.classList.remove("is-visible");
-    return;
-  }
-
-  const label = isTemperature ? "Nhiệt độ" : "Độ ẩm";
-  const value = isTemperature ? `${reading.temperature.toFixed(1)}°C` : `${reading.humidity}%`;
-  const time = reading.time.toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: isHistory ? undefined : "2-digit",
-  });
-  const cardRect = targetChart.closest(".chart-card, .history-card").getBoundingClientRect();
-  const tooltipX = Math.min(cardRect.width - 80, Math.max(80, event.clientX - cardRect.left));
-  const tooltipY = event.clientY - cardRect.top;
-
-  tooltip.className = `chart-tooltip is-visible ${isTemperature ? "temperature-tooltip" : "humidity-tooltip"}`;
-  tooltip.replaceChildren();
-  const valueElement = document.createElement("strong");
-  const timeElement = document.createElement("span");
-  valueElement.textContent = `${label}: ${value}`;
-  timeElement.textContent = time;
-  tooltip.append(valueElement, timeElement);
-  tooltip.style.left = `${tooltipX}px`;
-  tooltip.style.top = `${tooltipY}px`;
-}
+function drawHistoryChart() { historyZoom.draw(); }
 
 function hideReadingTooltip(tooltip) {
   tooltip.classList.remove("is-visible");
@@ -1611,10 +1373,6 @@ emailNotificationForm.addEventListener("submit", async (event) => {
     : "Đã tắt thông báo qua email.";
   emailNotificationMessage.classList.remove("error");
 });
-chart.addEventListener("pointermove", (event) => showReadingTooltip(event, false));
-chart.addEventListener("pointerleave", () => hideReadingTooltip(realtimeTooltip));
-historyChart.addEventListener("pointermove", (event) => showReadingTooltip(event, true));
-historyChart.addEventListener("pointerleave", () => hideReadingTooltip(historyTooltip));
 startCameraButton.addEventListener("click", startCamera);
 stopCameraButton.addEventListener("click", stopCamera);
 captureButton.addEventListener("click", captureCameraImage);
@@ -1635,6 +1393,9 @@ window.addEventListener("beforeunload", () => {
   stopSettingsFirestore();
   stopSharedLogs();
 });
+
+const realtimeZoom = GreenhouseChartZoom.attach(chart, () => readings, realtimeTooltip);
+const historyZoom = GreenhouseChartZoom.attach(historyChart, () => historyReadings, historyTooltip);
 
 fillThresholdForm();
 fillEmailNotificationForm();

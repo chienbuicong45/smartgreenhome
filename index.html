@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#0f766e" />
     <title>Greenhouse Monitor</title>
     <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="./styles.css?v=15" />
+    <link rel="stylesheet" href="./styles.css?v=16" />
   </head>
   <body>
     <main id="authView" class="auth-view">
@@ -175,8 +175,15 @@
               </div>
             </div>
           </div>
+<div class="chart-zoom-tools" data-chart-tools="environmentChart">
+            <button type="button" data-zoom="in" aria-label="Phóng to biểu đồ">＋ Phóng to</button>
+            <button type="button" data-zoom="out" aria-label="Thu nhỏ biểu đồ">− Thu nhỏ</button>
+            <button type="button" data-zoom="reset">Xem toàn khoảng</button>
+            <span class="chart-zoom-status" aria-live="polite">Zoom 1×</span>
+          </div>
+          <p class="chart-zoom-hint">Lăn chuột hoặc chụm/tách hai ngón để zoom · Kéo ngang để xem · Chạm để đọc giá trị</p>
           <div class="chart-stage">
-            <canvas id="environmentChart" role="img" aria-label="Biểu đồ nhiệt độ và độ ẩm" aria-describedby="realtimeChartStatus"></canvas>
+            <canvas id="environmentChart" tabindex="0" role="img" aria-label="Biểu đồ nhiệt độ và độ ẩm" aria-describedby="realtimeChartStatus"></canvas>
             <p id="realtimeChartStatus" class="chart-empty-state" role="status">Đang chờ dữ liệu từ thiết bị...</p>
           </div>
           <div id="realtimeTooltip" class="chart-tooltip" role="status"></div>
@@ -304,11 +311,19 @@
             <span>Trung bình <b id="humidityHistoryAverage">--</b></span>
           </div>
         </div>
-        <canvas id="historyChart" aria-label="Biểu đồ dữ liệu lịch sử đang xem"></canvas>
+<div class="chart-zoom-tools" data-chart-tools="historyChart">
+            <button type="button" data-zoom="in" aria-label="Phóng to biểu đồ">＋ Phóng to</button>
+            <button type="button" data-zoom="out" aria-label="Thu nhỏ biểu đồ">− Thu nhỏ</button>
+            <button type="button" data-zoom="reset">Xem toàn khoảng</button>
+            <span class="chart-zoom-status" aria-live="polite">Zoom 1×</span>
+          </div>
+          <p class="chart-zoom-hint">Lăn chuột hoặc chụm/tách hai ngón để zoom · Kéo ngang để xem · Chạm để đọc giá trị</p>
+        <canvas id="historyChart" tabindex="0" aria-label="Biểu đồ dữ liệu lịch sử đang xem"></canvas>
         <div id="historyTooltip" class="chart-tooltip" role="status"></div>
       </section>
     </main>
 
-    <script src="./script.js?v=37"></script>
+    <script src="./chart-zoom.js?v=1"></script>
+    <script src="./script.js?v=38"></script>
   </body>
 </html>
